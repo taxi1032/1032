@@ -803,12 +803,7 @@ function autofillPrevOdo(dateStr){
     document.getElementById('inp-odo-prev').classList.add('autofilled');
     notice.style.display='flex';
     notice.textContent=`✅ ${foundDate} 누적 ${fmt(foundOdo)}km 자동입력`;
-
-    // 오늘 누적거리가 비어있으면 전날값 그대로 복사 (휴무일 기본값)
-    const todayEl=document.getElementById('inp-odo-today');
-    if(todayEl && !getCommaVal('inp-odo-today')){
-      setCommaVal('inp-odo-today', foundOdo);
-    }
+    // 오늘 누적거리는 휴무일 토글 시에만 자동복사 (영업일은 직접 입력)
     calcDriveDistance();
   } else {
     if(!getCommaVal('inp-odo-prev')){
