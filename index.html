@@ -734,7 +734,8 @@ function init(){
   const n=new Date();
   const ds=`${n.getFullYear()}-${pad(n.getMonth()+1)}-${pad(n.getDate())}`;
   document.getElementById('inp-date').value=ds;
-  document.getElementById('todayDate').textContent=ds.replace(/-/g,'.');
+  const todayEl=document.getElementById('todayDate');
+  if(todayEl) todayEl.textContent=ds.replace(/-/g,'.');
   updateMonthLabel(); loadSettings(); autofillPrevOdo(ds);
   // 동기화 상태 표시
   const el=document.getElementById('syncStatus');
@@ -744,7 +745,8 @@ function init(){
 }
 const pad=n=>String(n).padStart(2,'0');
 function updateMonthLabel(){
-  document.getElementById('monthLabel').textContent=`${currentYear}년 ${currentMonth}월`;
+  const ml=document.getElementById('monthLabel');
+  if(ml) ml.textContent=`${currentYear}년 ${currentMonth}월`;
   const yl=document.getElementById('yearLabel');
   if(yl) yl.textContent=`${currentYear}년`;
 }
@@ -1017,9 +1019,8 @@ function recalcHours(){
   const s=timeToMin(document.getElementById('inp-start').value);
   const e=timeToMin(document.getElementById('inp-end').value);
   if(s===null||e===null){
-    document.getElementById('rhb-total').textContent='—';
-    document.getElementById('rhb-break').textContent='—';
-    document.getElementById('rhb-real').textContent='—';
+  const setTxt=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  setTxt('rhb-total','—'); setTxt('rhb-break','—'); setTxt('rhb-real','—');
     calcPerf(); return;
   }
   let total=e-s; if(total<0)total+=1440;
@@ -1038,9 +1039,10 @@ function recalcHours(){
   });
 
   const real=Math.max(total-breakMin,0);
-  document.getElementById('rhb-total').textContent=minToHStr(total);
-  document.getElementById('rhb-break').textContent=breakMin>0?`-${minToHStr(breakMin)}`:'없음';
-  document.getElementById('rhb-real').textContent=minToHStr(real);
+  const setTxt2=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  setTxt2('rhb-total',minToHStr(total));
+  setTxt2('rhb-break',breakMin>0?`-${minToHStr(breakMin)}`:'없음');
+  setTxt2('rhb-real',minToHStr(real));
   calcPerf();
 }
 
@@ -1124,17 +1126,20 @@ function onIncomeChange(){
   const gross=cash+cardTotal+btx+extraTotal;
   const net=cash+cardNet+btx+extraTotal-btxFee;
 
-  document.getElementById('cashCardTotal').textContent=`${fmt(cash+cardTotal)}원`;
-  document.getElementById('grossTotal').textContent=`${fmt(gross)}원`;
-  document.getElementById('btxFeeDisplay').textContent=`-${fmt(btxFee)}원`;
-  document.getElementById('btxFeeRow').textContent=`-${fmt(btxFee)}원`;
-  document.getElementById('cardFeeRow').textContent=cardFee>0?`-${fmt(cardFee)}원`:'-0원';
-  document.getElementById('totalIncomeDisplay').textContent=`${fmt(net)}원`;
+  const setV=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  setV('cashCardTotal',`${fmt(cash+cardTotal)}원`);
+  setV('grossTotal',`${fmt(gross)}원`);
+  setV('btxFeeDisplay',`-${fmt(btxFee)}원`);
+  setV('btxFeeRow',`-${fmt(btxFee)}원`);
+  setV('cardFeeRow',cardFee>0?`-${fmt(cardFee)}원`:'-0원');
+  setV('totalIncomeDisplay',`${fmt(net)}원`);
 
   // 기타수익 소계
   const etDiv=document.getElementById('extraIncomeTotal');
-  if(extraTotal>0){etDiv.style.display='flex';document.getElementById('extraIncomeTotalVal').textContent=`${fmt(extraTotal)}원`;}
-  else etDiv.style.display='none';
+  if(etDiv){
+    if(extraTotal>0){etDiv.style.display='flex';setV('extraIncomeTotalVal',`${fmt(extraTotal)}원`);}
+    else etDiv.style.display='none';
+  }
 
   calcPerf();
 }
@@ -1710,7 +1715,8 @@ function saveScriptUrl(){
   if(!url){showToast('⚠️ URL을 입력해주세요');return;}
   SCRIPT_URL=url;
   localStorage.setItem('scriptUrl',url);
-  document.getElementById('syncStatus').textContent='☁️ 연동됨';
+  const ssEl=document.getElementById('syncStatus');
+  if(ssEl) ssEl.textContent='☁️ 연동됨';
   showToast('✅ URL 저장됨! 동기화를 시작합니다...');
   setTimeout(()=>syncFromSheet(), 800);
 }
