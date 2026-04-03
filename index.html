@@ -1377,13 +1377,27 @@ function renderDayItem(e,rec,highlight){
   const dl=e.date.replace(/^\d{4}-/,'').replace('-','/');
 
   if(e.holiday==='full'){
+    const dailyExp=(e.charge||0)+(e.parking||0)+(e.wash||0)+(e.supplies||0)+(e.consumables||0)+(e.repair||0)+(e.expenseEtc||0);
+    const hasDist=e.driveDist>0;
     return `<div class="day-item holiday-full">
       <div class="day-header" onclick="toggleDetail('${e.date}')">
         <span class="day-date">${dl}<span class="weekday">(${wd})</span></span>
-        <span style="font-size:12px;color:var(--text3)">🏖 하루 휴무</span>
+        <span style="font-size:12px;color:var(--text3)">🏖 하루 휴무${dailyExp>0?` · <span style="color:var(--red)">-${fmt(dailyExp)}원</span>`:''}</span>
       </div>
       <div class="day-detail" id="detail-${e.date}">
-        ${e.memo?`<div class="detail-row" style="margin-top:8px"><span class="dl">메모</span><span class="dv" style="color:var(--orange);font-family:'Noto Sans KR'">${e.memo}</span></div>`:''}
+        ${hasDist?`<div class="detail-row" style="margin-top:8px"><span class="dl">주행거리</span><span class="dv">${fmt(e.driveDist)}km</span></div>`:''}
+        ${dailyExp>0?`
+        <div class="detail-divider"></div>
+        <div class="detail-row"><span class="dl">일 지출</span><span class="dv red">-${fmt(dailyExp)}원</span></div>
+        ${(e.charge||0)>0?`<div class="detail-row" style="font-size:12px;padding-left:12px"><span class="dl" style="color:var(--text3)">ㄴ충전비</span><span class="dv">${fmt(e.charge)}원</span></div>`:''}
+        ${(e.parking||0)>0?`<div class="detail-row" style="font-size:12px;padding-left:12px"><span class="dl" style="color:var(--text3)">ㄴ주차비</span><span class="dv">${fmt(e.parking)}원</span></div>`:''}
+        ${(e.wash||0)>0?`<div class="detail-row" style="font-size:12px;padding-left:12px"><span class="dl" style="color:var(--text3)">ㄴ세차</span><span class="dv">${fmt(e.wash)}원</span></div>`:''}
+        ${(e.supplies||0)>0?`<div class="detail-row" style="font-size:12px;padding-left:12px"><span class="dl" style="color:var(--text3)">ㄴ비품</span><span class="dv">${fmt(e.supplies)}원</span></div>`:''}
+        ${(e.consumables||0)>0?`<div class="detail-row" style="font-size:12px;padding-left:12px"><span class="dl" style="color:var(--text3)">ㄴ소모품</span><span class="dv">${fmt(e.consumables)}원</span></div>`:''}
+        ${(e.repair||0)>0?`<div class="detail-row" style="font-size:12px;padding-left:12px"><span class="dl" style="color:var(--text3)">ㄴ정비</span><span class="dv">${fmt(e.repair)}원</span></div>`:''}
+        ${(e.expenseEtc||0)>0?`<div class="detail-row" style="font-size:12px;padding-left:12px"><span class="dl" style="color:var(--text3)">ㄴ기타지출</span><span class="dv">${fmt(e.expenseEtc)}원</span></div>`:''}
+        `:''}
+        ${e.memo?`<div class="detail-divider"></div><div class="detail-row"><span class="dl">📝 메모</span><span class="dv" style="color:var(--orange);font-family:'Noto Sans KR'">${e.memo}</span></div>`:''}
         <div class="day-actions">
           <button class="btn-edit" onclick="editEntry('${e.date}')">수정</button>
           <button class="btn-del" onclick="deleteEntry('${e.date}')">삭제</button>
