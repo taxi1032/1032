@@ -714,6 +714,11 @@ async function syncFromSheet() {
     if(p==='daily') renderDaily();
     if(p==='monthly') renderMonthly();
     if(p==='annual') renderAnnual();
+    // 입력 탭이면 전날 누적거리 자동입력 재실행
+    if(p==='input'){
+      const ds=document.getElementById('inp-date').value;
+      if(ds) autofillPrevOdo(ds);
+    }
   } catch(e) {
     showSyncStatus('❌ 동기화 실패 (오프라인?)');
   }
@@ -776,18 +781,37 @@ function onDateChange(){
 /* ── Autofill prev odo ── */
 function autofillPrevOdo(dateStr){
   const data=getData();
-  const d=new Date(dateStr+'T00:00:00'); d.setDate(d.getDate()-1);
-  const prev=d.toISOString().slice(0,10);
-  const pe=data[prev], notice=document.getElementById('autofillNotice');
-  const f=document.getElementById('inp-odo-prev');
-  if(pe&&pe.odoToday>0){
-    setCommaVal('inp-odo-prev', pe.odoToday);
+  const notice=document.getElementById('autofillNotice');
+
+  // 전날부터 최대 7일 전까지 odoToday가 있는 날 탐색
+  let foundOdo=0, foundDate='';
+  for(let i=1; i<=7; i++){
+    const d=new Date(dateStr+'T00:00:00');
+    d.setDate(d.getDate()-i);
+    const prev=d.toISOString().slice(0,10);
+    const pe=data[prev];
+    if(pe && pe.odoToday>0){
+      foundOdo=pe.odoToday;
+      foundDate=prev;
+      break;
+    }
+  }
+
+  if(foundOdo>0){
+    // 전날 누적거리 → inp-odo-prev 자동입력
+    setCommaVal('inp-odo-prev', foundOdo);
     document.getElementById('inp-odo-prev').classList.add('autofilled');
     notice.style.display='flex';
-    notice.textContent=`✅ 전날(${prev}) 누적 ${fmt(pe.odoToday)}km 자동입력`;
+    notice.textContent=`✅ ${foundDate} 누적 ${fmt(foundOdo)}km 자동입력`;
+
+    // 오늘 누적거리가 비어있으면 전날값 그대로 복사 (휴무일 기본값)
+    const todayEl=document.getElementById('inp-odo-today');
+    if(todayEl && !getCommaVal('inp-odo-today')){
+      setCommaVal('inp-odo-today', foundOdo);
+    }
     calcDriveDistance();
   } else {
-    if(!document.getElementById('inp-odo-prev').value){
+    if(!getCommaVal('inp-odo-prev')){
       document.getElementById('inp-odo-prev').classList.remove('autofilled');
       notice.style.display='none';
     }
@@ -813,8 +837,15 @@ function toggleFullHoliday(){
       const notice=document.createElement('div');
       notice.id='holidayDistNotice';
       notice.style='font-size:11px;color:var(--orange);margin-bottom:8px;padding:6px 10px;background:rgba(255,159,64,.1);border-radius:6px;';
-      notice.textContent='🚗 휴무일 — 주행거리·지출만 입력 가능';
+      notice.textContent='🚗 휴무일 — 차량 이동 없으면 금일 누적거리는 전날과 동일하게 자동입력됩니다';
       distCard.insertBefore(notice, distCard.firstChild);
+    }
+    // 휴무일: 금일 누적거리가 비어있으면 전날 누적거리와 동일하게 자동입력
+    const prevOdo=getCommaVal('inp-odo-prev');
+    const todayOdo=getCommaVal('inp-odo-today');
+    if(prevOdo>0 && !todayOdo){
+      setCommaVal('inp-odo-today', prevOdo);
+      calcDriveDistance();
     }
   } else {
     distCard.style.display='block';
@@ -1299,7 +1330,18 @@ function calcMonthSummary(y,m){
   // 고정지출 시작월 체크
   const ym=`${y}-${pad(m)}`;
   const fixedStart=s.fixedStart||'';
-  const fixedCost=(fixedStart&&ym<fixedStart)?0:getFixedCost(s);
+  // 아이폰에서 "2026년 4월" 형식으로 저장될 수 있으므로 정규화
+  function normalizeYM(str){
+    if(!str) return '';
+    // 이미 YYYY-MM 형식이면 그대로
+    if(/^\d{4}-\d{2}$/.test(str)) return str;
+    // "2026년 4월" 형식 처리
+    const m=str.match(/(\d{4})[^\d]+(\d{1,2})/);
+    if(m) return `${m[1]}-${String(m[2]).padStart(2,'0')}`;
+    return str;
+  }
+  const fixedStartNorm=normalizeYM(fixedStart);
+  const fixedCost=(fixedStartNorm&&ym<fixedStartNorm)?0:getFixedCost(s);
   let ti=0,tg=0,te=0,tbf=0,tdd=0,twd=0,th=0,tt=0,wd=0,hol=0;
   entries.forEach(e=>{
     if(e.holiday==='full'){hol++;return;}
@@ -1669,8 +1711,17 @@ function updateFixedPreview(){
   if(el) el.textContent=`${fmt(total)}원`;
 }
 function saveSettings(){
+  const rawStart=document.getElementById('set-fixed-start').value||'';
+  // 아이폰 "2026년 4월" 형식도 YYYY-MM으로 정규화해서 저장
+  function normalizeYMSave(str){
+    if(!str) return '';
+    if(/^\d{4}-\d{2}$/.test(str)) return str;
+    const m=str.match(/(\d{4})[^\d]+(\d{1,2})/);
+    if(m) return `${m[1]}-${String(m[2]).padStart(2,'0')}`;
+    return str;
+  }
   const s={
-    fixedStart:document.getElementById('set-fixed-start').value||'',
+    fixedStart:normalizeYMSave(rawStart),
     salary:getCommaVal('set-salary'), tax:getCommaVal('set-tax'),
     insurance:getCommaVal('set-insurance'), comm:getCommaVal('set-comm'),
     carloan:getCommaVal('set-carloan'), union:getCommaVal('set-union'),
