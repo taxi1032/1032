@@ -543,7 +543,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
     <div style="font-size:12px;color:var(--text3);margin-bottom:12px">매월 자동으로 반영되는 고정비용입니다</div>
     <div class="form-row">
       <label class="form-label">📅 고정지출 적용 시작월</label>
-      <input type="month" class="form-input" id="set-fixed-start" placeholder="YYYY-MM" style="font-size:13px">
+      <input type="text" inputmode="numeric" class="form-input" id="set-fixed-start" placeholder="2026-04 (YYYY-MM 형식으로 입력)" style="font-size:13px">
       <div style="font-size:11px;color:var(--orange);margin-top:4px">설정한 달부터만 고정지출이 반영됩니다 (예: 2026-04)</div>
     </div>
 
@@ -794,9 +794,12 @@ function autofillPrevOdo(dateStr){
   const notice=document.getElementById('autofillNotice');
 
   // 전날부터 최대 7일 전까지 odoToday가 있는 날 탐색
-  // normalizeDate로 키 매칭 (날짜 형식이 달라도 찾을 수 있도록)
+  // normalizeDate로 키 매칭
   const normalizedKeys={};
-  Object.keys(data).forEach(k=>{ const nk=normalizeDate(k); if(nk) normalizedKeys[nk]=data[k]; });
+  Object.keys(data).forEach(k=>{
+    const nk=normalizeDate(k);
+    if(nk) normalizedKeys[nk]=data[k];
+  });
 
   let foundOdo=0, foundDate='';
   for(let i=1; i<=7; i++){
@@ -804,20 +807,22 @@ function autofillPrevOdo(dateStr){
     d.setDate(d.getDate()-i);
     const prev=d.toISOString().slice(0,10);
     const pe=normalizedKeys[prev];
-    if(pe && pe.odoToday>0){
-      foundOdo=pe.odoToday;
-      foundDate=prev;
-      break;
+    if(pe){
+      // odoToday 또는 odoPrev 중 더 큰 값 사용
+      const odo=pe.odoToday||pe.odoPrev||0;
+      if(odo>0){
+        foundOdo=odo;
+        foundDate=prev;
+        break;
+      }
     }
   }
 
   if(foundOdo>0){
-    // 전날 누적거리 → inp-odo-prev 자동입력
     setCommaVal('inp-odo-prev', foundOdo);
     document.getElementById('inp-odo-prev').classList.add('autofilled');
     notice.style.display='flex';
     notice.textContent=`✅ ${foundDate} 누적 ${fmt(foundOdo)}km 자동입력`;
-    // 오늘 누적거리는 휴무일 토글 시에만 자동복사 (영업일은 직접 입력)
     calcDriveDistance();
   } else {
     if(!getCommaVal('inp-odo-prev')){
@@ -1256,7 +1261,10 @@ function loadEntry(date){
     const sv=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
     const sc=(id,v)=>setCommaVal(id,v||0);
     sv('inp-start',e.startTime);sv('inp-end',e.endTime);
-    sc('inp-odo-prev',e.odoPrev);sc('inp-odo-today',e.odoToday);
+    sc('inp-odo-prev',e.odoPrev);
+    // odoToday는 0이어도 표시 (빈칸과 구분)
+    if(e.odoToday>0) setCommaVal('inp-odo-today',e.odoToday);
+    else document.getElementById('inp-odo-today').value='';
     sc('inp-work-dist',e.workDist);sc('inp-trips',e.trips);
     sc('inp-cash',e.cash);sc('inp-card',e.card);
     setCommaVal('inp-card-actual',e.cardActual||0);
