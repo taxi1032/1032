@@ -700,8 +700,16 @@ async function syncFromSheet() {
       localStorage.setItem('taxiData', JSON.stringify(merged));
     }
     if (s && s.success && s.settings && Object.keys(s.settings).length) {
-      _cache.settings = s.settings;
-      localStorage.setItem('taxiSettings', JSON.stringify(_cache.settings));
+      // fixedStart 정규화 (시트에 "2026년 4월" 형식으로 저장된 경우 변환)
+      const ss = s.settings;
+      if(ss.fixedStart){
+        if(!/^\d{4}-\d{2}$/.test(ss.fixedStart)){
+          const mx=ss.fixedStart.match(/(\d{4})[^\d]+(\d{1,2})/);
+          if(mx) ss.fixedStart=`${mx[1]}-${String(mx[2]).padStart(2,'0')}`;
+        }
+      }
+      _cache.settings = ss;
+      localStorage.setItem('taxiSettings', JSON.stringify(ss));
       loadSettingsToForm();
     }
     if (r && r.success && r.records && Object.keys(r.records).length) {
@@ -1880,7 +1888,7 @@ function deduplicateData(){
   const data=getData();
   const clean={};
   let dupCount=0;
-  // 모든 키를 정규화해서 중복 제거 (나중 키가 덮어씀 → 최신 수정본 유지)
+  // 모든 키를 정규화해서 중복 제거
   Object.keys(data).sort().forEach(k=>{
     const nk=normalizeDate(k);
     if(!nk)return;
@@ -1888,8 +1896,13 @@ function deduplicateData(){
     clean[nk]=data[k];
   });
   saveDataLocal(clean);
-  if(SCRIPT_URL) gsPost({action:'syncAll',data:clean,settings:_cache.settings,records:_cache.records});
+  // 정규화된 데이터를 Google 시트에도 업로드
+  if(SCRIPT_URL) gsPost({action:'syncAll',data:clean,settings:_cache.settings,records:_cache.records})
+    .then(r=>{if(r&&r.success)showSyncStatus('☁️ 동기화 완료');});
   showToast(`✅ 정리 완료! 중복 ${dupCount}개 제거됨`);
+  // 입력 탭이면 자동입력 재실행
+  const ds=document.getElementById('inp-date').value;
+  if(ds) autofillPrevOdo(ds);
   renderDaily();
 }
 
