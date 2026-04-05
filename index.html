@@ -700,13 +700,18 @@ async function syncFromSheet() {
       localStorage.setItem('taxiData', JSON.stringify(merged));
     }
     if (s && s.success && s.settings && Object.keys(s.settings).length) {
-      // fixedStart 정규화 (시트에 "2026년 4월" 형식으로 저장된 경우 변환)
       const ss = s.settings;
+      // fixedStart 정규화
       if(ss.fixedStart){
         if(!/^\d{4}-\d{2}$/.test(ss.fixedStart)){
           const mx=ss.fixedStart.match(/(\d{4})[^\d]+(\d{1,2})/);
           if(mx) ss.fixedStart=`${mx[1]}-${String(mx[2]).padStart(2,'0')}`;
         }
+      }
+      // 로컬에 fixedStart가 있으면 로컬 우선 유지 (시트값이 구버전일 수 있음)
+      const localFS=(_cache.settings||{}).fixedStart||'';
+      if(localFS && (!ss.fixedStart || ss.fixedStart < localFS)){
+        ss.fixedStart = localFS;
       }
       _cache.settings = ss;
       localStorage.setItem('taxiSettings', JSON.stringify(ss));
