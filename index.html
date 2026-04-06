@@ -843,24 +843,31 @@ function toggleFullHoliday(){
   isFullHoliday=!isFullHoliday;
   document.getElementById('fullHolidayTrack').className='toggle-track'+(isFullHoliday?' on':'');
   document.getElementById('fullHolidaySub').textContent=isFullHoliday?'하루 휴무':'영업일';
-  // 휴무일에도 주행거리·지출은 입력 가능 → 영업시간·수익만 숨김
-  ['workFields','incomeCard'].forEach(id=>{
-    document.getElementById(id).style.display=isFullHoliday?'none':'block';
-  });
-  // 주행거리·지출 카드는 휴무일에도 보이되 안내 표시
+
+  // 휴무일: 영업시간만 숨김, 수익/거리/지출은 모두 표시
+  const workFields=document.getElementById('workFields');
+  if(workFields) workFields.style.display=isFullHoliday?'none':'block';
+
+  // 수익 카드 - 휴무일에도 표시 (카드 실입금 등 기록 필요)
+  const incomeCard=document.getElementById('incomeCard');
+  if(incomeCard) incomeCard.style.display='block';
+
+  // 주행거리/지출 카드 항상 표시
   const distCard=document.getElementById('distCard');
   const expCard=document.getElementById('expenseCard');
+  if(distCard) distCard.style.display='block';
+  if(expCard) expCard.style.display='block';
+
   if(isFullHoliday){
-    distCard.style.display='block';
-    expCard.style.display='block';
+    // 휴무일 안내 표시
     if(!document.getElementById('holidayDistNotice')){
       const notice=document.createElement('div');
       notice.id='holidayDistNotice';
       notice.style='font-size:11px;color:var(--orange);margin-bottom:8px;padding:6px 10px;background:rgba(255,159,64,.1);border-radius:6px;';
-      notice.textContent='🚗 휴무일 — 차량 이동 없으면 금일 누적거리는 전날과 동일하게 자동입력됩니다';
-      distCard.insertBefore(notice, distCard.firstChild);
+      notice.textContent='🏖 휴무일 — 카드 실입금·주행거리·지출 입력 가능';
+      if(distCard) distCard.insertBefore(notice, distCard.firstChild);
     }
-    // 휴무일: 금일 누적거리가 비어있으면 전날 누적거리와 동일하게 자동입력
+    // 휴무일: 금일 누적거리 자동입력
     const prevOdo=getCommaVal('inp-odo-prev');
     const todayOdo=getCommaVal('inp-odo-today');
     if(prevOdo>0 && !todayOdo){
@@ -868,8 +875,6 @@ function toggleFullHoliday(){
       calcDriveDistance();
     }
   } else {
-    distCard.style.display='block';
-    expCard.style.display='block';
     const n=document.getElementById('holidayDistNotice');
     if(n) n.remove();
   }
@@ -1418,13 +1423,24 @@ function renderDayItem(e,rec,highlight){
   if(e.holiday==='full'){
     const dailyExp=(e.charge||0)+(e.parking||0)+(e.wash||0)+(e.supplies||0)+(e.consumables||0)+(e.repair||0)+(e.expenseEtc||0);
     const hasDist=e.driveDist>0;
+    const cardActual=e.cardActual||0;
+    const cardTotal=e.card||0;
+    const hasCard=cardActual>0||cardTotal>0;
     return `<div class="day-item holiday-full">
       <div class="day-header" onclick="toggleDetail('${e.date}')">
         <span class="day-date">${dl}<span class="weekday">(${wd})</span></span>
-        <span style="font-size:12px;color:var(--text3)">🏖 하루 휴무${dailyExp>0?` · <span style="color:var(--red)">-${fmt(dailyExp)}원</span>`:''}</span>
+        <span style="font-size:12px;color:var(--text3)">🏖 하루 휴무${hasCard?` · <span style="color:var(--green)">카드입금 ${fmt(cardActual||cardTotal)}원</span>`:''}${dailyExp>0?` · <span style="color:var(--red)">-${fmt(dailyExp)}원</span>`:''}</span>
       </div>
       <div class="day-detail" id="detail-${e.date}">
-        ${hasDist?`<div class="detail-row" style="margin-top:8px"><span class="dl">주행거리</span><span class="dv">${fmt(e.driveDist)}km</span></div>`:''}
+        ${hasCard?`
+        <div class="detail-row" style="margin-top:8px">
+          <span class="dl">💳 카드 실입금</span>
+          <span class="dv green">${fmt(cardActual||cardTotal)}원</span>
+        </div>
+        ${cardTotal>0&&cardActual>0&&cardTotal!==cardActual?`<div class="detail-row" style="font-size:12px;padding-left:12px"><span class="dl" style="color:var(--text3)">ㄴ단말기총액</span><span class="dv">${fmt(cardTotal)}원</span></div>`:''}
+        ${cardTotal>0&&cardActual>0&&cardTotal!==cardActual?`<div class="detail-row" style="font-size:12px;padding-left:12px"><span class="dl" style="color:var(--text3)">ㄴ수수료</span><span class="dv red">-${fmt(cardTotal-cardActual)}원 (${(((cardTotal-cardActual)/cardTotal)*100).toFixed(2)}%)</span></div>`:''}
+        `:''}
+        ${hasDist?`<div class="detail-row" ${hasCard?'':'style="margin-top:8px"'}><span class="dl">주행거리</span><span class="dv">${fmt(e.driveDist)}km</span></div>`:''}
         ${dailyExp>0?`
         <div class="detail-divider"></div>
         <div class="detail-row"><span class="dl">일 지출</span><span class="dv red">-${fmt(dailyExp)}원</span></div>
