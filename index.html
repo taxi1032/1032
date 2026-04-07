@@ -694,8 +694,24 @@ async function syncFromSheet() {
         const nk = normalizeDate(k);
         if(nk) local[nk] = _cache.data[k];
       });
-      // 병합 (로컬 우선)
-      const merged = {...sheetData, ...local};
+      // 병합 (수익 있는 쪽 우선, 없으면 로컬 우선)
+      const merged = {...sheetData};
+      Object.keys(local).forEach(k=>{
+        const localEntry=local[k];
+        const sheetEntry=merged[k];
+        if(!sheetEntry){
+          // 시트에 없으면 로컬 사용
+          merged[k]=localEntry;
+        } else {
+          // 둘 다 있으면 수익 있는 쪽 우선
+          const localIncome=(localEntry.cash||0)+(localEntry.card||0)+(localEntry.btx||0);
+          const sheetIncome=(sheetEntry.cash||0)+(sheetEntry.card||0)+(sheetEntry.btx||0);
+          if(localIncome>=sheetIncome){
+            merged[k]=localEntry; // 로컬 우선 (수익 같거나 많으면)
+          }
+          // sheetIncome > localIncome 이면 시트 데이터 유지
+        }
+      });
       _cache.data = merged;
       localStorage.setItem('taxiData', JSON.stringify(merged));
     }
