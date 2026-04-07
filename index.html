@@ -278,11 +278,11 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
       <div class="form-row-2">
         <div>
           <label class="form-label">영업 시작</label>
-          <input type="time" class="form-input" id="inp-start" oninput="recalcHours()">
+          <input type="text" inputmode="numeric" class="form-input" id="inp-start" placeholder="06:45" maxlength="5" oninput="onTimeInput(this);recalcHours()">
         </div>
         <div>
           <label class="form-label">영업 종료</label>
-          <input type="time" class="form-input" id="inp-end" oninput="recalcHours()">
+          <input type="text" inputmode="numeric" class="form-input" id="inp-end" placeholder="17:30" maxlength="5" oninput="onTimeInput(this);recalcHours()">
         </div>
       </div>
 
@@ -974,6 +974,23 @@ function calcCardFee() {
   onIncomeChange();
 }
 
+// 시간 입력 자동 포맷 (0645 → 06:45)
+function onTimeInput(el){
+  let v=el.value.replace(/[^\d:]/g,'');
+  // 콜론 없이 숫자만 입력한 경우 자동 포맷
+  if(/^\d{3,4}$/.test(v)){
+    v=v.padStart(4,'0');
+    v=v.slice(0,2)+':'+v.slice(2);
+  }
+  // HH:MM 형식 유효성 체크
+  if(/^\d{2}:\d{2}$/.test(v)){
+    const h=parseInt(v.split(':')[0]);
+    const m=parseInt(v.split(':')[1]);
+    if(h>23||m>59) v='';
+  }
+  el.value=v;
+}
+
 /* ── Extra income slots ── */
 const EXTRA_TYPES=['팁','지원금','호출료','심야할증','장거리할증','기타'];
 function addExtraIncome(data){
@@ -1022,8 +1039,8 @@ function addBreak(data){
         data-role="break-reason" value="${data?data.reason||'':''}">
     </div>
     <div class="break-time-row">
-      <div><label class="form-label">중단 시작</label><input type="time" class="form-input" data-role="break-start" oninput="recalcHours()" value="${data?data.start||'':''}"></div>
-      <div><label class="form-label">중단 종료</label><input type="time" class="form-input" data-role="break-end" oninput="recalcHours()" value="${data?data.end||'':''}"></div>
+      <div><label class="form-label">중단 시작</label><input type="text" inputmode="numeric" class="form-input" data-role="break-start" placeholder="10:00" maxlength="5" oninput="onTimeInput(this);recalcHours()" value="${data?data.start||'':''}"></div>
+      <div><label class="form-label">중단 종료</label><input type="text" inputmode="numeric" class="form-input" data-role="break-end" placeholder="10:30" maxlength="5" oninput="onTimeInput(this);recalcHours()" value="${data?data.end||'':''}"></div>
     </div>
     <div class="break-duration" id="dur-${id}"></div>`;
   document.getElementById('breakSlots').appendChild(div);
