@@ -403,10 +403,20 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
     </div>
 
     <!-- BTX -->
-    <div class="form-row">
-      <label class="form-label">BTX 모빌리티 (원)</label>
-      <input type="text" inputmode="numeric" class="form-input comma-input" id="inp-btx" placeholder="0" oninput="onCommaInput(this);onIncomeChange()">
-      <div class="btx-note">가맹 수수료 3.08% (월 1회 별도 청구) → <span class="btx-fee" id="btxFeeDisplay">-0원</span></div>
+    <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:11px 12px;margin-bottom:12px;">
+      <div style="font-size:11px;color:var(--orange);font-weight:700;letter-spacing:1px;margin-bottom:9px;">🚖 BTX 모빌리티</div>
+      <div class="form-row">
+        <label class="form-label">BTX 수익 (원)</label>
+        <input type="text" inputmode="numeric" class="form-input comma-input" id="inp-btx" placeholder="0" oninput="onCommaInput(this);onIncomeChange()">
+      </div>
+      <div style="background:var(--surface3);border-radius:var(--radius-sm);padding:8px 12px;margin-top:6px;">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">📋 가맹 수수료 안내 (매월 15일 청구)</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:6px;">전월 총매출(현금+카드) × 3.08% — 공정위 제재 반영 전까지</div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;">
+          <span style="color:var(--text2)">전월 매출 기준 예상 수수료</span>
+          <span style="font-family:'DM Mono',monospace;color:var(--orange);font-weight:700" id="btxFeeRefDisplay">계산 중...</span>
+        </div>
+      </div>
     </div>
 
     <!-- 기타 수익 항목별 -->
@@ -550,7 +560,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
     <div style="font-size:11px;color:var(--text2);font-weight:700;margin-bottom:8px;letter-spacing:1px;">📌 기본 고정비</div>
     <div class="form-row-2">
       <div><label class="form-label">월 급여 (원)</label><input type="text" inputmode="numeric" class="form-input comma-input" id="set-salary" placeholder="0" oninput="onCommaInput(this);updateFixedPreview()"></div>
-      <div><label class="form-label">세금 (원)</label><input type="text" inputmode="numeric" class="form-input comma-input" id="set-tax" placeholder="0" oninput="onCommaInput(this);updateFixedPreview()"></div>
+      <div><label class="form-label">BTX 관리수수료 (원)</label><input type="text" inputmode="numeric" class="form-input comma-input" id="set-tax" placeholder="0" oninput="onCommaInput(this);updateFixedPreview()"></div>
     </div>
     <div class="form-row-2">
       <div><label class="form-label">공제보험 (원)</label><input type="text" inputmode="numeric" class="form-input comma-input" id="set-insurance" placeholder="0" oninput="onCommaInput(this);updateFixedPreview()"></div>
@@ -766,6 +776,7 @@ function init(){
   const todayEl=document.getElementById('todayDate');
   if(todayEl) todayEl.textContent=ds.replace(/-/g,'.');
   updateMonthLabel(); loadSettings(); autofillPrevOdo(ds);
+  calcBtxFeeRef();
   // 동기화 상태 표시
   const el=document.getElementById('syncStatus');
   if(el) el.textContent = SCRIPT_URL ? '☁️ 연동됨' : '⚠️ URL 미설정';
@@ -991,6 +1002,29 @@ function onTimeInput(el){
   el.value=v;
 }
 
+// BTX 가맹수수료 참고금액 계산 (전월 현금+카드 총매출 × 3.08%)
+function calcBtxFeeRef(){
+  const now=new Date();
+  const prevY=now.getMonth()===0?now.getFullYear()-1:now.getFullYear();
+  const prevM=now.getMonth()===0?12:now.getMonth();
+  const entries=getMonthData(prevY,prevM);
+  let prevTotal=0;
+  entries.forEach(e=>{
+    if(e.holiday!=='full'){
+      prevTotal+=(e.cash||0)+(e.card||0); // 현금+카드만 (기타수익 제외)
+    }
+  });
+  const fee=Math.round(prevTotal*0.0308);
+  const el=document.getElementById('btxFeeRefDisplay');
+  if(el){
+    if(prevTotal>0){
+      el.textContent=`${fmt(fee)}원 (전월 ${fmt(prevTotal)}원 × 3.08%)`;
+    } else {
+      el.textContent='전월 데이터 없음';
+    }
+  }
+}
+
 /* ── Extra income slots ── */
 const EXTRA_TYPES=['팁','지원금','호출료','심야할증','장거리할증','기타'];
 function addExtraIncome(data){
@@ -1186,7 +1220,6 @@ function onIncomeChange(){
   const setV=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
   setV('cashCardTotal',`${fmt(cash+cardTotal)}원`);
   setV('grossTotal',`${fmt(gross)}원`);
-  setV('btxFeeDisplay',`-${fmt(btxFee)}원`);
   setV('btxFeeRow',`-${fmt(btxFee)}원`);
   setV('cardFeeRow',cardFee>0?`-${fmt(cardFee)}원`:'-0원');
   setV('totalIncomeDisplay',`${fmt(net)}원`);
@@ -1596,7 +1629,6 @@ function _clearFormOnly(){
   const resetEls = ['rhb-total','rhb-break','rhb-real'];
   resetEls.forEach(id=>{const el=document.getElementById(id);if(el)el.textContent='—';});
   document.getElementById('driveDistDisplay').textContent='— km';
-  document.getElementById('btxFeeDisplay').textContent='-0원';
   document.getElementById('btxFeeRow').textContent='-0원';
   document.getElementById('cardFeeRow').textContent='-0원';
   document.getElementById('totalIncomeDisplay').textContent='0원';
@@ -1723,7 +1755,7 @@ function renderMonthly(){
     <div class="card">
       <div class="card-title">💰 수익 상세</div>
       <div class="detail-row"><span class="dl">총 매출(수수료전)</span><span class="dv yellow">${fmt(s.totalGross)}원</span></div>
-      <div class="detail-row"><span class="dl" style="padding-left:12px;font-size:12px;color:var(--text3)">ㄴBTX 수수료</span><span class="dv" style="font-size:12px;color:var(--red)">-${fmt(s.totalBtxFee)}원</span></div>
+      <div class="detail-row"><span class="dl" style="padding-left:12px;font-size:12px;color:var(--text3)">ㄴBTX 가맹수수료 (자동계산 참고용)</span><span class="dv" style="font-size:12px;color:var(--red)">-${fmt(s.totalBtxFee)}원</span></div>
       <div class="detail-row"><span class="dl">실 수익(수수료후)</span><span class="dv green">${fmt(s.totalIncome)}원</span></div>
       <div class="detail-divider"></div>
       <div class="detail-row"><span class="dl">일 변동 지출</span><span class="dv red">-${fmt(s.totalExpense)}원</span></div>
