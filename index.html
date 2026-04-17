@@ -403,20 +403,9 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
     </div>
 
     <!-- BTX -->
-    <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:11px 12px;margin-bottom:12px;">
-      <div style="font-size:11px;color:var(--orange);font-weight:700;letter-spacing:1px;margin-bottom:9px;">🚖 BTX 모빌리티</div>
-      <div class="form-row">
-        <label class="form-label">BTX 수익 (원)</label>
-        <input type="text" inputmode="numeric" class="form-input comma-input" id="inp-btx" placeholder="0" oninput="onCommaInput(this);onIncomeChange()">
-      </div>
-      <div style="background:var(--surface3);border-radius:var(--radius-sm);padding:8px 12px;margin-top:6px;">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">📋 가맹 수수료 안내 (매월 15일 청구)</div>
-        <div style="font-size:11px;color:var(--text3);margin-bottom:6px;">전월 총매출(현금+카드) × 3.08% — 공정위 제재 반영 전까지</div>
-        <div style="display:flex;justify-content:space-between;font-size:12px;">
-          <span style="color:var(--text2)">전월 매출 기준 예상 수수료</span>
-          <span style="font-family:'DM Mono',monospace;color:var(--orange);font-weight:700" id="btxFeeRefDisplay">계산 중...</span>
-        </div>
-      </div>
+    <div class="form-row">
+      <label class="form-label">BTX 모빌리티 수익 (원)</label>
+      <input type="text" inputmode="numeric" class="form-input comma-input" id="inp-btx" placeholder="0" oninput="onCommaInput(this);onIncomeChange()">
     </div>
 
     <!-- 기타 수익 항목별 -->
@@ -443,6 +432,18 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
   <!-- 지출 -->
   <div class="card" id="expenseCard">
     <div class="card-title">💸 지출 (당일)</div>
+
+    <!-- BTX 가맹수수료 (매월 15일) -->
+    <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:11px 12px;margin-bottom:12px;">
+      <div style="font-size:11px;color:var(--orange);font-weight:700;letter-spacing:1px;margin-bottom:8px;">🚖 BTX 가맹수수료 (매월 15일 납부)</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">전월 총매출(현금+카드) × 3.08% — 공정위 제재 반영 전까지</div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:8px;">
+        <span style="color:var(--text2)">전월 기준 예상 수수료</span>
+        <span style="font-family:'DM Mono',monospace;color:var(--orange);font-weight:700" id="btxFeeRefDisplay">-</span>
+      </div>
+      <label class="form-label">실제 납부 금액 (원) <span style="color:var(--text3);font-size:10px">15일에 직접 입력</span></label>
+      <input type="text" inputmode="numeric" class="form-input comma-input" id="inp-btx-fee-paid" placeholder="0 (15일 납부일에만 입력)" oninput="onCommaInput(this)">
+    </div>
     <div class="form-row-2">
       <div><label class="form-label">충전비 (원)</label><input type="text" inputmode="numeric" class="form-input comma-input" id="inp-charge" placeholder="0" oninput="onCommaInput(this)"></div>
       <div><label class="form-label">주차비 (원)</label><input type="text" inputmode="numeric" class="form-input comma-input" id="inp-parking" placeholder="0" oninput="onCommaInput(this)"></div>
@@ -1306,6 +1307,7 @@ function saveDay(){
     consumables:getCommaVal('inp-consumables'),
     repair:getCommaVal('inp-repair'),
     expenseEtc:getCommaVal('inp-expense-etc'),
+    btxFeePaid:getCommaVal('inp-btx-fee-paid'),
     memo:document.getElementById('inp-memo').value,
     note:document.getElementById('inp-note').value,
   };
@@ -1352,6 +1354,7 @@ function loadEntry(date){
     else if(e.incomeEtc>0){addExtraIncome({type:'기타',amount:e.incomeEtc});}
     sc('inp-charge',e.charge);sc('inp-parking',e.parking);sc('inp-wash',e.wash);
     sc('inp-supplies',e.supplies);sc('inp-consumables',e.consumables);sc('inp-repair',e.repair);sc('inp-expense-etc',e.expenseEtc);
+    setCommaVal('inp-btx-fee-paid',e.btxFeePaid||0);
     sv('inp-memo',e.memo);sv('inp-note',e.note);
     // load breaks
     document.getElementById('breakSlots').innerHTML=''; breakCount=0;
@@ -1389,7 +1392,7 @@ function calcEntry(e){
   const cardFee=e.cardFee||0;
   const netIncome=e.cash+(e.cardActual&&e.cardActual>0?e.cardActual:e.card)+e.btx+e.incomeEtc-e.btxFee;
   const grossIncome=e.cash+e.card+e.btx+e.incomeEtc;
-  const dailyExpense=e.charge+e.parking+e.wash+e.supplies+e.consumables+e.repair+e.expenseEtc;
+  const dailyExpense=(e.charge||0)+(e.parking||0)+(e.wash||0)+(e.supplies||0)+(e.consumables||0)+(e.repair||0)+(e.expenseEtc||0)+(e.btxFeePaid||0);
   const profit=netIncome-dailyExpense;
   const perKm=e.workDist>0?Math.round(netIncome/e.workDist):0;
   const perTrip=e.trips>0?Math.round(netIncome/e.trips):0;
@@ -1588,6 +1591,7 @@ function renderDayItem(e,rec,highlight){
       ${(e.supplies||0)>0?`<div class="detail-row" style="font-size:12px;padding-left:12px"><span class="dl" style="color:var(--text3)">ㄴ비품</span><span class="dv">${fmt(e.supplies)}원</span></div>`:''}
       ${(e.consumables||0)>0?`<div class="detail-row" style="font-size:12px;padding-left:12px"><span class="dl" style="color:var(--text3)">ㄴ소모품</span><span class="dv">${fmt(e.consumables)}원</span></div>`:''}
       ${(e.expenseEtc||0)>0?`<div class="detail-row" style="font-size:12px;padding-left:12px"><span class="dl" style="color:var(--text3)">ㄴ기타</span><span class="dv">${fmt(e.expenseEtc)}원</span></div>`:''}
+      ${(e.btxFeePaid||0)>0?`<div class="detail-row" style="font-size:12px;padding-left:12px"><span class="dl" style="color:var(--orange)">ㄴBTX 가맹수수료 납부</span><span class="dv" style="color:var(--orange)">${fmt(e.btxFeePaid)}원</span></div>`:''}
       <div class="detail-divider"></div>
       <div class="detail-row"><span class="dl" style="font-weight:700">일 순이익</span><span class="dv ${pcol}" style="font-size:14px">${c.profit>=0?'+':'-'}${fmt(Math.abs(c.profit))}원</span></div>
       ${e.memo?`<div class="detail-row"><span class="dl">📝 메모</span><span class="dv" style="color:var(--orange);font-family:'Noto Sans KR';font-size:12px">${e.memo}</span></div>`:''}
@@ -1619,7 +1623,7 @@ function editEntry(date){
 // 폼만 초기화 (날짜 복원 없이)
 function _clearFormOnly(){
   ['inp-start','inp-end','inp-odo-prev','inp-odo-today','inp-work-dist','inp-trips',
-   'inp-cash','inp-card','inp-card-actual','inp-btx',
+   'inp-cash','inp-card','inp-card-actual','inp-btx','inp-btx-fee-paid',
    'inp-charge','inp-parking','inp-wash','inp-supplies','inp-consumables','inp-repair','inp-expense-etc','inp-memo','inp-note']
   .forEach(id=>{const el=document.getElementById(id);if(el){el.value='';el.classList&&el.classList.remove('autofilled');}});
   document.getElementById('extraIncomeSlots').innerHTML='';
