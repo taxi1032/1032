@@ -1498,7 +1498,11 @@ function renderDayItem(e,rec,highlight){
     return `<div class="day-item holiday-full">
       <div class="day-header" onclick="toggleDetail('${e.date}')">
         <span class="day-date">${dl}<span class="weekday">(${wd})</span></span>
-        <span style="font-size:12px;color:var(--text3)">🏖 하루 휴무${hasCard?` · <span style="color:var(--green)">카드입금 ${fmt(cardActual||cardTotal)}원</span>`:''}${dailyExp>0?` · <span style="color:var(--red)">-${fmt(dailyExp)}원</span>`:''}</span>
+        <div style="text-align:right">
+          <span style="font-size:12px;color:var(--text3)">🏖 하루 휴무${hasCard?` · <span style="color:var(--green)">카드입금 ${fmt(cardActual||cardTotal)}원</span>`:''}${dailyExp>0?` · <span style="color:var(--red)">-${fmt(dailyExp)}원</span>`:''}</span>
+          ${e.note?`<div style="font-size:11px;color:var(--purple);margin-top:2px;font-family:'Noto Sans KR'">📌 ${e.note}</div>`:''}
+          ${e.memo&&!e.note?`<div style="font-size:11px;color:var(--orange);margin-top:2px;font-family:'Noto Sans KR'">📝 ${e.memo}</div>`:''}
+        </div>
       </div>
       <div class="day-detail" id="detail-${e.date}">
         ${hasCard?`
@@ -1521,7 +1525,9 @@ function renderDayItem(e,rec,highlight){
         ${(e.repair||0)>0?`<div class="detail-row" style="font-size:12px;padding-left:12px"><span class="dl" style="color:var(--text3)">ㄴ정비</span><span class="dv">${fmt(e.repair)}원</span></div>`:''}
         ${(e.expenseEtc||0)>0?`<div class="detail-row" style="font-size:12px;padding-left:12px"><span class="dl" style="color:var(--text3)">ㄴ기타지출</span><span class="dv">${fmt(e.expenseEtc)}원</span></div>`:''}
         `:''}
-        ${e.memo?`<div class="detail-divider"></div><div class="detail-row"><span class="dl">📝 메모</span><span class="dv" style="color:var(--orange);font-family:'Noto Sans KR'">${e.memo}</span></div>`:''}
+        <div class="detail-divider"></div>
+        ${e.note?`<div class="detail-row"><span class="dl">📌 비고</span><span class="dv" style="color:var(--purple);font-family:'Noto Sans KR'">${e.note}</span></div>`:`<div class="detail-row"><span class="dl" style="color:var(--text3)">📌 비고</span><span class="dv" style="color:var(--text3)">-</span></div>`}
+        ${e.memo?`<div class="detail-row"><span class="dl">📝 메모</span><span class="dv" style="color:var(--orange);font-family:'Noto Sans KR'">${e.memo}</span></div>`:`<div class="detail-row"><span class="dl" style="color:var(--text3)">📝 메모</span><span class="dv" style="color:var(--text3)">-</span></div>`}
         <div class="day-actions">
           <button class="btn-edit" onclick="editEntry('${e.date}')">수정</button>
           <button class="btn-del" onclick="deleteEntry('${e.date}')">삭제</button>
@@ -1606,13 +1612,12 @@ function renderDayItem(e,rec,highlight){
 function toggleDetail(date){document.getElementById('detail-'+date).classList.toggle('open');}
 
 function editEntry(date){
-  // 먼저 입력 폼 초기화
   _clearFormOnly();
-  // 날짜 설정
   document.getElementById('inp-date').value=date;
-  // 데이터 로드
   loadEntry(date);
-  // 페이지 전환 (clearInputs 호출 없이)
+  // 누적거리가 0이면 자동입력 재실행 (휴무일 수정 시 발생하는 버그 방지)
+  const prevOdo=getCommaVal('inp-odo-prev');
+  if(!prevOdo) autofillPrevOdo(date);
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('page-input').classList.add('active');
