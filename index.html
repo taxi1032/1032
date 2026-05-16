@@ -422,7 +422,6 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
       <div class="ib-gross-row"><span class="ib-gross-label">현금 + 카드 합산</span><span class="ib-gross-value" id="cashCardTotal">0원</span></div>
       <div class="ib-divider"></div>
       <div class="ib-row"><span class="ib-label">총 매출 (수수료 전)</span><span class="ib-value" id="grossTotal">0원</span></div>
-      <div class="ib-row"><span class="ib-label">BTX 가맹 수수료</span><span class="ib-value" style="color:var(--red)" id="btxFeeRow">-0원</span></div>
       <div class="ib-row"><span class="ib-label">카드 수수료</span><span class="ib-value" style="color:var(--red)" id="cardFeeRow">-0원</span></div>
       <div class="ib-divider"></div>
       <div class="ib-total-row"><span class="ib-total-label">실 수익 (수수료 차감 후)</span><span class="ib-total-value" id="totalIncomeDisplay">0원</span></div>
@@ -443,6 +442,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
       </div>
       <label class="form-label">실제 납부 금액 (원) <span style="color:var(--text3);font-size:10px">15일에 직접 입력</span></label>
       <input type="text" inputmode="numeric" class="form-input comma-input" id="inp-btx-fee-paid" placeholder="0 (15일 납부일에만 입력)" oninput="onCommaInput(this)">
+      <div style="font-size:11px;color:var(--text3);margin-top:5px">※ 전월 헤이나우 가맹 매출의 3.08%</div>
     </div>
     <div class="form-row-2">
       <div><label class="form-label">충전비 (원)</label><input type="text" inputmode="numeric" class="form-input comma-input" id="inp-charge" placeholder="0" oninput="onCommaInput(this)"></div>
@@ -1216,12 +1216,11 @@ function onIncomeChange(){
   const extraTotal=getExtraIncomeTotal();
   const btxFee=Math.round(btx*0.0308);
   const gross=cash+cardTotal+btx+extraTotal;
-  const net=cash+cardNet+btx+extraTotal-btxFee;
+  const net=cash+cardNet+btx+extraTotal;
 
   const setV=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
   setV('cashCardTotal',`${fmt(cash+cardTotal)}원`);
   setV('grossTotal',`${fmt(gross)}원`);
-  setV('btxFeeRow',`-${fmt(btxFee)}원`);
   setV('cardFeeRow',cardFee>0?`-${fmt(cardFee)}원`:'-0원');
   setV('totalIncomeDisplay',`${fmt(net)}원`);
 
@@ -1390,7 +1389,7 @@ function clearInputs(){
 /* ── Calc ── */
 function calcEntry(e){
   const cardFee=e.cardFee||0;
-  const netIncome=e.cash+(e.cardActual&&e.cardActual>0?e.cardActual:e.card)+e.btx+e.incomeEtc-e.btxFee;
+  const netIncome=e.cash+(e.cardActual&&e.cardActual>0?e.cardActual:e.card)+e.btx+e.incomeEtc;
   const grossIncome=e.cash+e.card+e.btx+e.incomeEtc;
   const dailyExpense=(e.charge||0)+(e.parking||0)+(e.wash||0)+(e.supplies||0)+(e.consumables||0)+(e.repair||0)+(e.expenseEtc||0)+(e.btxFeePaid||0);
   const profit=netIncome-dailyExpense;
@@ -1566,7 +1565,11 @@ function renderDayItem(e,rec,highlight){
 
   return `<div class="day-item${isRec?' is-record':''}${hasPartBreak?' holiday-part':''}">
     <div class="day-header" onclick="toggleDetail('${e.date}')">
-      <div><span class="day-date">${dl}<span class="weekday">(${wd})</span></span>${isRec?'<span class="record-badge">🏆</span>':''}${hasPartBreak?'<span style="font-size:10px;color:var(--orange);margin-left:5px">⏸부분휴무</span>':''}</div>
+      <div>
+        <span class="day-date">${dl}<span class="weekday">(${wd})</span></span>${isRec?'<span class="record-badge">🏆</span>':''}${hasPartBreak?'<span style="font-size:10px;color:var(--orange);margin-left:5px">⏸부분휴무</span>':''}
+        ${e.note?`<div style="font-size:11px;color:var(--purple);margin-top:2px;font-family:'Noto Sans KR'">📌 ${e.note}</div>`:''}
+        ${e.memo?`<div style="font-size:11px;color:var(--orange);margin-top:2px;font-family:'Noto Sans KR'">📝 ${e.memo}</div>`:''}
+      </div>
       <div class="day-profit ${pcol}">${c.profit>=0?'+':'-'}${fmt(Math.abs(c.profit))}원</div>
     </div>
     <div class="day-detail" id="detail-${e.date}">
@@ -1582,7 +1585,6 @@ function renderDayItem(e,rec,highlight){
       <div class="detail-row"><span class="dl">현금+카드</span><span class="dv yellow">${fmt((e.cash||0)+(e.card||0))}원</span></div>
       <div class="detail-row"><span class="dl">총 매출(수수료전)</span><span class="dv">${fmt(c.grossIncome)}원</span></div>
       ${c.cardFee>0?`<div class="detail-row" style="font-size:12px;padding-left:12px"><span class="dl" style="color:var(--text3)">ㄴ카드 수수료 (${(c.cardFee/e.card*100).toFixed(2)}%)</span><span class="dv" style="color:var(--red)">-${fmt(c.cardFee)}원</span></div>`:''}
-      ${e.btx>0?`<div class="detail-row" style="font-size:12px;padding-left:12px"><span class="dl" style="color:var(--text3)">ㄴBTX 가맹수수료 3.08%</span><span class="dv" style="color:var(--red)">-${fmt(e.btxFee)}원</span></div>`:''}
       ${(e.extraItems&&e.extraItems.length)?e.extraItems.map(it=>`<div class="detail-row" style="font-size:12px;padding-left:12px"><span class="dl" style="color:var(--text3)">ㄴ${it.type}</span><span class="dv green">+${fmt(it.amount)}원</span></div>`).join(''):(e.incomeEtc>0?`<div class="detail-row" style="font-size:12px;padding-left:12px"><span class="dl" style="color:var(--text3)">ㄴ기타</span><span class="dv green">+${fmt(e.incomeEtc)}원</span></div>`:'')}
       <div class="detail-row"><span class="dl">실 수익(수수료후)</span><span class="dv green">${fmt(c.netIncome)}원</span></div>
       ${c.perH>0?`<div class="detail-row"><span class="dl">⭐ 시간당 매출</span><span class="dv green">${fmt(c.perH)}원/h</span></div>`:''}
@@ -1764,7 +1766,6 @@ function renderMonthly(){
     <div class="card">
       <div class="card-title">💰 수익 상세</div>
       <div class="detail-row"><span class="dl">총 매출(수수료전)</span><span class="dv yellow">${fmt(s.totalGross)}원</span></div>
-      <div class="detail-row"><span class="dl" style="padding-left:12px;font-size:12px;color:var(--text3)">ㄴBTX 가맹수수료 (자동계산 참고용)</span><span class="dv" style="font-size:12px;color:var(--red)">-${fmt(s.totalBtxFee)}원</span></div>
       <div class="detail-row"><span class="dl">실 수익(수수료후)</span><span class="dv green">${fmt(s.totalIncome)}원</span></div>
       <div class="detail-divider"></div>
       <div class="detail-row"><span class="dl">일 변동 지출</span><span class="dv red">-${fmt(s.totalExpense)}원</span></div>
@@ -1822,7 +1823,6 @@ function renderAnnual(){
       <div class="card-title">📋 부가가치세 신고 참고 자료</div>
       <div style="font-size:11px;color:var(--text3);margin-bottom:10px">국세청 자료와 비교용 — ${currentYear}년 기준</div>
       <div class="detail-row"><span class="dl">연간 총 매출 (수수료 전)</span><span class="dv yellow">${fmt(tg)}원</span></div>
-      <div class="detail-row"><span class="dl" style="padding-left:12px;font-size:12px;color:var(--text3)">ㄴBTX 가맹 수수료</span><span class="dv" style="font-size:12px;color:var(--red)">-${fmt(tbtxfee)}원</span></div>
       <div class="detail-row"><span class="dl">연간 실 수익 (수수료 후)</span><span class="dv green">${fmt(ti)}원</span></div>
       <div class="detail-divider"></div>
       <div class="detail-row"><span class="dl">연간 변동 지출</span><span class="dv red">-${fmt(texp_var)}원</span></div>
