@@ -1484,6 +1484,8 @@ function renderDaily(){
   container.innerHTML=[...entries].reverse().map(e=>renderDayItem(e,rec)).join('');
 }
 
+function escQ(s){return (s||'').replace(/'/g,'&#39;').replace(/"/g,'&quot;');}
+
 function renderDayItem(e,rec,highlight){
   const d=new Date(e.date+'T00:00:00'), wd=WEEKDAYS[d.getDay()];
   const dl=e.date.replace(/^\d{4}-/,'').replace('-','/');
@@ -1563,16 +1565,20 @@ function renderDayItem(e,rec,highlight){
 
   const hl=highlight||'';
 
+  const safeDate=e.date; // YYYY-MM-DD 형식은 특수문자 없음
+  const safeMemo=escQ(e.memo||'');
+  const safeNote=escQ(e.note||'');
+
   return `<div class="day-item${isRec?' is-record':''}${hasPartBreak?' holiday-part':''}">
-    <div class="day-header" onclick="toggleDetail('${e.date}')">
+    <div class="day-header" onclick="toggleDetail('${safeDate}')">
       <div>
         <span class="day-date">${dl}<span class="weekday">(${wd})</span></span>${isRec?'<span class="record-badge">🏆</span>':''}${hasPartBreak?'<span style="font-size:10px;color:var(--orange);margin-left:5px">⏸부분휴무</span>':''}
-        ${e.note?`<div style="font-size:11px;color:var(--purple);margin-top:2px;font-family:'Noto Sans KR'">📌 ${e.note}</div>`:''}
-        ${e.memo?`<div style="font-size:11px;color:var(--orange);margin-top:2px;font-family:'Noto Sans KR'">📝 ${e.memo}</div>`:''}
+        ${e.note?`<div style="font-size:11px;color:var(--purple);margin-top:2px;font-family:'Noto Sans KR'">📌 ${safeNote}</div>`:''}
+        ${e.memo?`<div style="font-size:11px;color:var(--orange);margin-top:2px;font-family:'Noto Sans KR'">📝 ${safeMemo}</div>`:''}
       </div>
       <div class="day-profit ${pcol}">${c.profit>=0?'+':'-'}${fmt(Math.abs(c.profit))}원</div>
     </div>
-    <div class="day-detail" id="detail-${e.date}">
+    <div class="day-detail" id="detail-${safeDate}">
       ${timeStr?`<div class="detail-row"><span class="dl">영업시간</span><span class="dv blue">${timeStr}</span></div>`:''}
       ${breaksHTML}
       ${realH&&!timeStr?`<div class="detail-row"><span class="dl">실 영업시간</span><span class="dv blue">${realH}h</span></div>`:''}
@@ -1605,8 +1611,8 @@ function renderDayItem(e,rec,highlight){
       ${e.memo?`<div class="detail-row"><span class="dl">📝 메모</span><span class="dv" style="color:var(--orange);font-family:'Noto Sans KR';font-size:12px">${e.memo}</span></div>`:''}
       ${e.note?`<div class="detail-row"><span class="dl">🗒 비고</span><span class="dv" style="color:var(--purple);font-family:'Noto Sans KR';font-size:12px">${e.note}</span></div>`:''}
       <div class="day-actions">
-        <button class="btn-edit" onclick="editEntry('${e.date}')">수정</button>
-        <button class="btn-del" onclick="deleteEntry('${e.date}')">삭제</button>
+        <button class="btn-edit" onclick="editEntry('${safeDate}')">수정</button>
+        <button class="btn-del" onclick="deleteEntry('${safeDate}')">삭제</button>
       </div>
     </div></div>`;
 }
