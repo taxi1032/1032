@@ -1645,16 +1645,18 @@ function _clearFormOnly(){
   const hn=document.getElementById('holidayDistNotice'); if(hn)hn.remove();
   const resetEls = ['rhb-total','rhb-break','rhb-real'];
   resetEls.forEach(id=>{const el=document.getElementById(id);if(el)el.textContent='—';});
-  document.getElementById('driveDistDisplay').textContent='— km';
-  document.getElementById('btxFeeRow').textContent='-0원';
-  document.getElementById('cardFeeRow').textContent='-0원';
-  document.getElementById('totalIncomeDisplay').textContent='0원';
-  document.getElementById('cashCardTotal').textContent='0원';
-  document.getElementById('grossTotal').textContent='0원';
-  document.getElementById('autofillNotice').style.display='none';
-  document.getElementById('perfPreview').style.display='none';
-  document.getElementById('cardFeeDisplay').style.display='none';
-  document.getElementById('extraIncomeTotal').style.display='none';
+  const setT=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  setT('driveDistDisplay','— km');
+  setT('btxFeeRow','-0원');
+  setT('cardFeeRow','-0원');
+  setT('totalIncomeDisplay','0원');
+  setT('cashCardTotal','0원');
+  setT('grossTotal','0원');
+  const setD=(id,v)=>{const el=document.getElementById(id);if(el)el.style.display=v;};
+  setD('autofillNotice','none');
+  setD('perfPreview','none');
+  setD('cardFeeDisplay','none');
+  setD('extraIncomeTotal','none');
 }
 function deleteEntry(date){
   if(!confirm(`${date} 데이터를 삭제할까요?`))return;
