@@ -1333,35 +1333,43 @@ function loadEntry(date){
     }
   }
   if(!e)return;
+  // 휴무 상태 설정
   if(e.holiday==='full'){if(!isFullHoliday)toggleFullHoliday();}
-  else {
-    if(isFullHoliday)toggleFullHoliday();
-    const sv=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
-    const sc=(id,v)=>setCommaVal(id,v||0);
-    sv('inp-start',e.startTime);sv('inp-end',e.endTime);
-    sc('inp-odo-prev',e.odoPrev);
-    // odoToday는 0이어도 표시 (빈칸과 구분)
-    if(e.odoToday>0) setCommaVal('inp-odo-today',e.odoToday);
-    else document.getElementById('inp-odo-today').value='';
-    sc('inp-work-dist',e.workDist);sc('inp-trips',e.trips);
-    sc('inp-cash',e.cash);sc('inp-card',e.card);
-    setCommaVal('inp-card-actual',e.cardActual||0);
-    sc('inp-btx',e.btx);
+  else{if(isFullHoliday)toggleFullHoliday();}
+
+  // 공통 데이터 복원 (영업일/휴무일 모두)
+  const sv=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
+  const sc=(id,v)=>setCommaVal(id,v||0);
+  sv('inp-memo',e.memo); sv('inp-note',e.note);
+  sc('inp-charge',e.charge); sc('inp-parking',e.parking); sc('inp-wash',e.wash);
+  sc('inp-supplies',e.supplies); sc('inp-consumables',e.consumables);
+  sc('inp-repair',e.repair); sc('inp-expense-etc',e.expenseEtc);
+  setCommaVal('inp-btx-fee-paid',e.btxFeePaid||0);
+  // 카드 실입금 (휴무일에도 입금 기록 가능)
+  sc('inp-card',e.card);
+  setCommaVal('inp-card-actual',e.cardActual||0);
+  // 누적거리 (휴무일에도 주행 가능)
+  sc('inp-odo-prev',e.odoPrev);
+  if(e.odoToday>0) setCommaVal('inp-odo-today',e.odoToday);
+  else document.getElementById('inp-odo-today').value='';
+
+  if(e.holiday!=='full'){
+    // 영업일 전용 데이터
+    sv('inp-start',e.startTime); sv('inp-end',e.endTime);
+    sc('inp-work-dist',e.workDist); sc('inp-trips',e.trips);
+    sc('inp-cash',e.cash); sc('inp-btx',e.btx);
     // 기타수익 항목 복원
     document.getElementById('extraIncomeSlots').innerHTML='';
     if(e.extraItems&&e.extraItems.length){e.extraItems.forEach(item=>addExtraIncome(item));}
     else if(e.incomeEtc>0){addExtraIncome({type:'기타',amount:e.incomeEtc});}
-    sc('inp-charge',e.charge);sc('inp-parking',e.parking);sc('inp-wash',e.wash);
-    sc('inp-supplies',e.supplies);sc('inp-consumables',e.consumables);sc('inp-repair',e.repair);sc('inp-expense-etc',e.expenseEtc);
-    setCommaVal('inp-btx-fee-paid',e.btxFeePaid||0);
-    sv('inp-memo',e.memo);sv('inp-note',e.note);
-    // load breaks
+    // 중단시간 복원
     document.getElementById('breakSlots').innerHTML=''; breakCount=0;
     if(e.breaks&&e.breaks.length){e.breaks.forEach(b=>addBreak(b));}
-    document.getElementById('autofillNotice').style.display='none';
-    document.getElementById('inp-odo-prev').classList.remove('autofilled');
-    recalcHours();calcDriveDistance();onIncomeChange();calcPerf();
+    recalcHours(); onIncomeChange();
   }
+  document.getElementById('autofillNotice').style.display='none';
+  document.getElementById('inp-odo-prev').classList.remove('autofilled');
+  calcDriveDistance(); calcPerf();
 }
 
 /* ── Records ── */
