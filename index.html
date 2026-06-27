@@ -441,7 +441,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
         <span style="font-family:'DM Mono',monospace;color:var(--orange);font-weight:700" id="btxFeeRefDisplay">-</span>
       </div>
       <label class="form-label">실제 납부 금액 (원) <span style="color:var(--text3);font-size:10px">15일에 직접 입력</span></label>
-      <input type="text" inputmode="numeric" class="form-input comma-input" id="inp-btx-fee-paid" placeholder="0 (15일 납부일에만 입력)" oninput="onCommaInput(this)">
+      <input type="text" inputmode="numeric" class="form-input comma-input" id="inp-btx-fee-paid" placeholder="0 (15일 납부일에만 입력)" oninput="onCommaInput(this);calcPerf()">
       <div style="font-size:11px;color:var(--text3);margin-top:5px">※ 전월 헤이나우 가맹 매출의 3.08%</div>
     </div>
     <div class="form-row-2">
@@ -1499,21 +1499,24 @@ function renderDayItem(e,rec,highlight){
   const dl=e.date.replace(/^\d{4}-/,'').replace('-','/');
 
   if(e.holiday==='full'){
-    const dailyExp=(e.charge||0)+(e.parking||0)+(e.wash||0)+(e.supplies||0)+(e.consumables||0)+(e.repair||0)+(e.expenseEtc||0);
+    const dailyExp=(e.charge||0)+(e.parking||0)+(e.wash||0)+(e.supplies||0)+(e.consumables||0)+(e.repair||0)+(e.expenseEtc||0)+(e.btxFeePaid||0);
     const hasDist=e.driveDist>0;
     const cardActual=e.cardActual||0;
     const cardTotal=e.card||0;
     const hasCard=cardActual>0||cardTotal>0;
+    const safeDate=e.date;
+    const safeMemo=escQ(e.memo||'');
+    const safeNote=escQ(e.note||'');
     return `<div class="day-item holiday-full">
-      <div class="day-header" onclick="toggleDetail('${e.date}')">
+      <div class="day-header" onclick="toggleDetail('${safeDate}')">
         <span class="day-date">${dl}<span class="weekday">(${wd})</span></span>
         <div style="text-align:right">
           <span style="font-size:12px;color:var(--text3)">🏖 하루 휴무${hasCard?` · <span style="color:var(--green)">카드입금 ${fmt(cardActual||cardTotal)}원</span>`:''}${dailyExp>0?` · <span style="color:var(--red)">-${fmt(dailyExp)}원</span>`:''}</span>
-          ${e.note?`<div style="font-size:11px;color:var(--purple);margin-top:2px;font-family:'Noto Sans KR'">📌 ${e.note}</div>`:''}
-          ${e.memo&&!e.note?`<div style="font-size:11px;color:var(--orange);margin-top:2px;font-family:'Noto Sans KR'">📝 ${e.memo}</div>`:''}
+          ${e.note?`<div style="font-size:11px;color:var(--purple);margin-top:2px;font-family:'Noto Sans KR'">📌 ${safeNote}</div>`:''}
+          ${e.memo?`<div style="font-size:11px;color:var(--orange);margin-top:2px;font-family:'Noto Sans KR'">📝 ${safeMemo}</div>`:''}
         </div>
       </div>
-      <div class="day-detail" id="detail-${e.date}">
+      <div class="day-detail" id="detail-${safeDate}">
         ${hasCard?`
         <div class="detail-row" style="margin-top:8px">
           <span class="dl">💳 카드 실입금</span>
@@ -1533,13 +1536,14 @@ function renderDayItem(e,rec,highlight){
         ${(e.consumables||0)>0?`<div class="detail-row" style="font-size:12px;padding-left:12px"><span class="dl" style="color:var(--text3)">ㄴ소모품</span><span class="dv">${fmt(e.consumables)}원</span></div>`:''}
         ${(e.repair||0)>0?`<div class="detail-row" style="font-size:12px;padding-left:12px"><span class="dl" style="color:var(--text3)">ㄴ정비</span><span class="dv">${fmt(e.repair)}원</span></div>`:''}
         ${(e.expenseEtc||0)>0?`<div class="detail-row" style="font-size:12px;padding-left:12px"><span class="dl" style="color:var(--text3)">ㄴ기타지출</span><span class="dv">${fmt(e.expenseEtc)}원</span></div>`:''}
+        ${(e.btxFeePaid||0)>0?`<div class="detail-row" style="font-size:12px;padding-left:12px"><span class="dl" style="color:var(--orange)">ㄴBTX 가맹수수료 납부</span><span class="dv" style="color:var(--orange)">${fmt(e.btxFeePaid)}원</span></div>`:''}
         `:''}
         <div class="detail-divider"></div>
-        ${e.note?`<div class="detail-row"><span class="dl">📌 비고</span><span class="dv" style="color:var(--purple);font-family:'Noto Sans KR'">${e.note}</span></div>`:`<div class="detail-row"><span class="dl" style="color:var(--text3)">📌 비고</span><span class="dv" style="color:var(--text3)">-</span></div>`}
-        ${e.memo?`<div class="detail-row"><span class="dl">📝 메모</span><span class="dv" style="color:var(--orange);font-family:'Noto Sans KR'">${e.memo}</span></div>`:`<div class="detail-row"><span class="dl" style="color:var(--text3)">📝 메모</span><span class="dv" style="color:var(--text3)">-</span></div>`}
+        ${e.note?`<div class="detail-row"><span class="dl">📌 비고</span><span class="dv" style="color:var(--purple);font-family:'Noto Sans KR'">${safeNote}</span></div>`:`<div class="detail-row"><span class="dl" style="color:var(--text3)">📌 비고</span><span class="dv" style="color:var(--text3)">-</span></div>`}
+        ${e.memo?`<div class="detail-row"><span class="dl">📝 메모</span><span class="dv" style="color:var(--orange);font-family:'Noto Sans KR'">${safeMemo}</span></div>`:`<div class="detail-row"><span class="dl" style="color:var(--text3)">📝 메모</span><span class="dv" style="color:var(--text3)">-</span></div>`}
         <div class="day-actions">
-          <button class="btn-edit" onclick="editEntry('${e.date}')">수정</button>
-          <button class="btn-del" onclick="deleteEntry('${e.date}')">삭제</button>
+          <button class="btn-edit" onclick="editEntry('${safeDate}')">수정</button>
+          <button class="btn-del" onclick="deleteEntry('${safeDate}')">삭제</button>
         </div>
       </div></div>`;
   }
