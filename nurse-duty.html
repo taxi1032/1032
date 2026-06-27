@@ -1,0 +1,1247 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="우리병동 듀티">
+<title>우리병동 듀티표</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap');
+
+:root {
+  /* 파스텔 팔레트 — 밝고 따뜻한 병동 느낌 */
+  --bg: #fef6f9;
+  --surface: #ffffff;
+  --surface2: #fdf0f5;
+  --border: #f0d6e4;
+  --border2: #e8c8d8;
+
+  /* 포인트 컬러 */
+  --pink:  #f472b6;
+  --pink2: #ec4899;
+  --peach: #fb923c;
+  --mint:  #34d399;
+  --sky:   #60a5fa;
+  --lav:   #a78bfa;
+  --rose:  #fb7185;
+
+  /* 듀티 컬러 */
+  --D:  #f59e0b;  /* 데이   — 따뜻한 앰버 */
+  --E:  #10b981;  /* 이브닝 — 민트 그린 */
+  --N:  #6366f1;  /* 나이트 — 인디고 */
+  --OFF:#94a3b8;  /* 휴무   — 슬레이트 */
+  --AL: #f43f5e;  /* 연차   — 로즈 */
+  --KB: #f97316;  /* 기복   — 오렌지 */
+  --SL: #8b5cf6;  /* 병가   — 바이올렛 */
+  --TL: #ec4899;  /* 팀장   — 핑크 */
+
+  --text:  #1e1b2e;
+  --sub:   #9ca3af;
+  --sub2:  #6b7280;
+
+  --r: 16px;
+  --r2: 12px;
+  --sat: env(safe-area-inset-top,0px);
+  --sab: env(safe-area-inset-bottom,0px);
+  --shadow: 0 2px 16px rgba(244,114,182,.12);
+  --shadow2: 0 1px 4px rgba(0,0,0,.06);
+}
+
+* { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Noto Sans KR', -apple-system, sans-serif;
+  min-height: 100vh;
+}
+
+/* ── HEADER ── */
+.hdr {
+  background: linear-gradient(135deg, #fce7f3 0%, #ede9fe 100%);
+  border-bottom: 1.5px solid var(--border);
+  padding: calc(var(--sat)+14px) 18px 14px;
+  position: sticky; top:0; z-index:100;
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+}
+.hdr-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px }
+.hdr-logo { display:flex; align-items:center; gap:8px }
+.hdr-logo .icon { font-size:24px; line-height:1 }
+.hdr-logo h1 { font-size:17px; font-weight:900; color:var(--pink2); letter-spacing:-.5px }
+.hdr-logo span { font-size:11px; color:var(--sub2); font-weight:500 }
+.mnav { display:flex; align-items:center; gap:8px }
+.mnav button {
+  background: white; border: 1.5px solid var(--border2);
+  color: var(--pink2); width:34px; height:34px; border-radius:50%;
+  font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+  box-shadow: var(--shadow2);
+}
+.mlbl {
+  font-size:16px; font-weight:900; min-width:92px; text-align:center;
+  color: var(--text); letter-spacing:-.3px;
+}
+
+/* ── TABS ── */
+.tabs {
+  display:flex; background:#fff;
+  border-bottom: 1.5px solid var(--border);
+  overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;
+}
+.tabs::-webkit-scrollbar { display:none }
+.tab {
+  padding:12px 14px; font-size:12px; font-weight:700; color:var(--sub);
+  cursor:pointer; white-space:nowrap; border-bottom:2.5px solid transparent;
+  transition:all .2s; flex-shrink:0; letter-spacing:-.2px;
+}
+.tab.active { color:var(--pink2); border-bottom-color:var(--pink2) }
+
+/* ── CONTENT ── */
+.content { padding:14px 14px calc(var(--sab)+90px) }
+
+/* ── BADGE ── */
+.badge {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:28px; height:28px; border-radius:8px;
+  font-size:10px; font-weight:900; flex-shrink:0;
+}
+.bd { background:#fef3c7; color:#d97706; border:1px solid #fde68a }
+.be { background:#d1fae5; color:#059669; border:1px solid #a7f3d0 }
+.bn { background:#ede9fe; color:#4f46e5; border:1px solid #c4b5fd }
+.bo { background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0 }
+.ba { background:#ffe4e6; color:#e11d48; border:1px solid #fecdd3 }
+.bk { background:#ffedd5; color:#ea580c; border:1px solid #fed7aa }
+.bs { background:#f3e8ff; color:#7c3aed; border:1px solid #ddd6fe }
+.bx { background:transparent; color:transparent; border:none }
+
+/* ── TABLE ── */
+.twrap {
+  overflow-x:auto; -webkit-overflow-scrolling:touch;
+  border-radius:var(--r2); border:1.5px solid var(--border);
+  box-shadow: var(--shadow2);
+}
+table { border-collapse:collapse; width:100%; font-size:10px }
+thead th {
+  background:#fdf2f8; color:var(--sub2); font-weight:700;
+  padding:6px 2px; text-align:center; white-space:nowrap;
+  border-bottom:1.5px solid var(--border);
+}
+thead th.nc {
+  min-width:64px; position:sticky; left:0; z-index:10;
+  background:#fdf2f8; border-right:1.5px solid var(--border);
+}
+thead th.hol { color:var(--AL)!important; font-weight:900 }
+thead th.sun { color:#f87171 }
+thead th.sat { color:#60a5fa }
+tbody tr { border-bottom:1px solid #fce7f3 }
+tbody tr:last-child { border-bottom:none }
+tbody tr:hover { background:#fef9fb }
+td { padding:3px 1px; text-align:center; vertical-align:middle }
+td.nc {
+  position:sticky; left:0; background:#fff; z-index:5;
+  font-size:10px; font-weight:700; min-width:64px;
+  padding:5px 7px; text-align:left;
+  border-right:1.5px solid var(--border);
+}
+td.nc .jd { font-size:8px; color:var(--sub); margin-top:1px }
+td.nc .tltag { font-size:8px; color:var(--TL); font-weight:900 }
+td.dc { cursor:pointer; min-width:26px }
+td.dc:active { opacity:.55 }
+td.cs { background:#f0f9ff }
+td.ch { background:#fff1f2 }
+tr.tl-row td.nc { border-left:3px solid var(--TL) }
+tr.stat td {
+  background:#fdf2f8; font-size:9px; color:var(--sub2);
+  padding:3px 1px; border-top:1px solid var(--border);
+}
+tr.stat td.nc { color:var(--sub2); font-weight:700; font-size:9px }
+td.rm { min-width:46px }
+td.rm input {
+  background:transparent; border:none; color:var(--sub2);
+  font-size:9px; width:100%; outline:none; text-align:center;
+}
+td.cnt { font-size:10px; font-weight:900; min-width:22px }
+
+/* ── CARDS ── */
+.card {
+  background:#fff; border:1.5px solid var(--border);
+  border-radius:var(--r); padding:14px;
+  box-shadow: var(--shadow2); margin-bottom:10px;
+}
+.card-pink { background:linear-gradient(135deg,#fce7f3,#fdf4ff) }
+
+/* ── BUTTONS ── */
+.btn-row { display:flex; gap:8px; margin-bottom:12px }
+.genbtn {
+  flex:1; background:linear-gradient(135deg,var(--pink),var(--lav));
+  color:#fff; border:none; padding:14px 12px; border-radius:var(--r2);
+  font-size:14px; font-weight:900; cursor:pointer;
+  box-shadow:0 4px 16px rgba(244,114,182,.35);
+  letter-spacing:-.2px; display:flex; align-items:center; justify-content:center; gap:6px;
+}
+.emgbtn {
+  flex:0 0 auto; background:linear-gradient(135deg,var(--peach),#ef4444);
+  color:#fff; border:none; padding:14px 14px; border-radius:var(--r2);
+  font-size:13px; font-weight:900; cursor:pointer;
+  box-shadow:0 4px 16px rgba(249,115,22,.35);
+  display:flex; align-items:center; justify-content:center; gap:4px;
+}
+.printbtn {
+  background:#fff; border:1.5px solid var(--border2);
+  color:var(--sub2); padding:8px 14px; border-radius:var(--r2);
+  font-size:12px; font-weight:700; cursor:pointer;
+  display:flex; align-items:center; gap:5px;
+}
+.bsm {
+  background:#fff; border:1.5px solid var(--border);
+  color:var(--text); padding:6px 12px; border-radius:20px;
+  font-size:11px; font-weight:700; cursor:pointer;
+  box-shadow: var(--shadow2);
+}
+.bdanger { border-color:#fecdd3; color:var(--AL) }
+.bpri {
+  width:100%; background:linear-gradient(135deg,var(--pink),var(--lav));
+  color:#fff; border:none; padding:14px; border-radius:var(--r2);
+  font-size:16px; font-weight:900; cursor:pointer; margin-top:8px;
+  box-shadow:0 4px 16px rgba(244,114,182,.3);
+}
+.bcan {
+  width:100%; background:#f8fafc; border:1.5px solid var(--border);
+  color:var(--sub2); padding:13px; border-radius:var(--r2);
+  font-size:15px; font-weight:700; cursor:pointer; margin-top:8px;
+}
+
+/* ── VER TAG ── */
+.ver-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px }
+.ver-tag {
+  font-size:11px; color:var(--sub2); background:#fff;
+  border:1.5px solid var(--border); border-radius:20px; padding:4px 11px;
+  font-weight:600;
+}
+
+/* ── EMG BANNER ── */
+.emg-banner {
+  background:linear-gradient(135deg,#fff7ed,#fef3c7);
+  border:1.5px solid #fed7aa; border-radius:var(--r2);
+  padding:11px 14px; margin-bottom:10px;
+  display:flex; align-items:center; gap:10px;
+}
+.emg-banner .etxt { flex:1; font-size:12px; color:#92400e; font-weight:700; line-height:1.5 }
+.emg-badge {
+  background:linear-gradient(135deg,var(--peach),#ef4444);
+  color:#fff; font-size:10px; padding:3px 10px;
+  border-radius:20px; font-weight:900; white-space:nowrap; flex-shrink:0;
+}
+
+/* ── LEGEND ── */
+.legend { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px }
+.li { display:flex; align-items:center; gap:4px; font-size:11px; color:var(--sub2); font-weight:600 }
+
+/* ── STAFF CARDS ── */
+.scard {
+  background:#fff; border:1.5px solid var(--border);
+  border-radius:var(--r); padding:14px;
+  display:flex; align-items:center; gap:12px;
+  box-shadow: var(--shadow2); margin-bottom:10px;
+}
+.savt {
+  width:42px; height:42px; border-radius:50%; flex-shrink:0;
+  background:linear-gradient(135deg,var(--pink),var(--lav));
+  display:flex; align-items:center; justify-content:center;
+  font-size:16px; font-weight:900; color:#fff;
+  box-shadow:0 2px 8px rgba(244,114,182,.35);
+}
+.savt.tl { background:linear-gradient(135deg,var(--TL),var(--lav)) }
+.sinf { flex:1 }
+.sname { font-size:15px; font-weight:900; color:var(--text) }
+.smeta { font-size:11px; color:var(--sub); margin-top:2px }
+.sacts { display:flex; gap:6px }
+
+/* ── MODAL ── */
+.moverlay {
+  position:fixed; inset:0; background:rgba(30,27,46,.6);
+  z-index:200; display:flex; align-items:flex-end;
+  backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+}
+.modal {
+  background:#fff; border-radius:24px 24px 0 0;
+  width:100%; padding:20px 20px calc(var(--sab)+28px);
+  max-height:88vh; overflow-y:auto;
+  box-shadow:0 -8px 40px rgba(244,114,182,.2);
+}
+.mhandle {
+  width:40px; height:4px; background:var(--border2);
+  border-radius:2px; margin:0 auto 18px; flex-shrink:0;
+}
+.modal h3 { font-size:18px; font-weight:900; margin-bottom:14px; color:var(--text) }
+.fg { margin-bottom:13px }
+.fg label { font-size:12px; color:var(--sub2); margin-bottom:6px; display:block; font-weight:700 }
+.fg input, .fg select {
+  width:100%; background:#fafafa; border:1.5px solid var(--border2);
+  color:var(--text); padding:12px 14px; border-radius:var(--r2);
+  font-size:15px; outline:none; -webkit-appearance:none;
+  font-family:inherit;
+}
+.fg input:focus, .fg select:focus { border-color:var(--pink) }
+
+/* ── DUTY PICKER ── */
+.dpicker { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:14px }
+.dopt {
+  padding:12px 3px; border-radius:12px; border:1.5px solid var(--border);
+  background:#fafafa; cursor:pointer; font-weight:900; font-size:13px;
+  text-align:center; transition:all .15s; font-family:inherit;
+}
+.dopt.sel { border-color:currentColor; background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.08) }
+.dopt.forbidden { opacity:.25; cursor:not-allowed }
+.dopt-D{color:var(--D)} .dopt-E{color:var(--E)} .dopt-N{color:var(--N)}
+.dopt-OFF{color:var(--OFF)} .dopt-AL{color:var(--AL)}
+.dopt-KB{color:var(--KB)} .dopt-SL{color:var(--SL)} .dopt-x{color:var(--sub)}
+
+/* ── REQUEST ── */
+.rsec { margin-bottom:18px }
+.rsec h4 { font-size:13px; font-weight:900; margin-bottom:8px; display:flex; align-items:center; gap:6px }
+.rcnt {
+  font-size:10px; background:var(--AL); color:#fff;
+  border-radius:20px; padding:1px 8px; font-weight:700;
+}
+.rcnt-off { background:var(--OFF) }
+.daygrid { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px }
+.dbtn {
+  width:33px; height:33px; border-radius:8px; border:1.5px solid var(--border);
+  background:#fff; color:var(--text); font-size:11px; font-weight:700;
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
+  box-shadow: var(--shadow2);
+}
+.dbtn.s-off { background:#f1f5f9; border-color:var(--OFF); color:var(--OFF) }
+.dbtn.s-al  { background:#ffe4e6; border-color:var(--AL); color:var(--AL) }
+.dbtn.s-kb  { background:#ffedd5; border-color:var(--KB); color:var(--KB) }
+.dbtn.pond  { border-color:#fca5a5; color:#fca5a5 }
+.dbtn:disabled { opacity:.3; cursor:not-allowed }
+
+/* ── HOL TAG ── */
+.hol-list { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px }
+.hol-tag {
+  background:#fff0f3; border:1.5px solid #fecdd3; color:var(--AL);
+  border-radius:20px; padding:5px 12px;
+  font-size:12px; font-weight:700; display:flex; align-items:center; gap:6px; cursor:pointer;
+}
+
+/* ── STATS ── */
+.scards { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px }
+.scard2 {
+  background:#fff; border:1.5px solid var(--border);
+  border-radius:var(--r); padding:14px; box-shadow:var(--shadow2);
+}
+.scard2 .val { font-size:26px; font-weight:900 }
+.scard2 .lbl { font-size:11px; color:var(--sub); margin-top:2px; font-weight:600 }
+.ok   { color:#059669; font-size:11px; margin-top:4px; font-weight:700 }
+.warn { color:var(--AL); font-size:11px; margin-top:4px; font-weight:700 }
+
+/* ── GUIDE ── */
+.guide-section { margin-bottom:20px }
+.guide-section h3 {
+  font-size:15px; font-weight:900; color:var(--pink2);
+  margin-bottom:10px; display:flex; align-items:center; gap:6px;
+}
+.step-list { display:flex; flex-direction:column; gap:8px }
+.step {
+  display:flex; gap:12px; align-items:flex-start;
+  background:#fff; border:1.5px solid var(--border);
+  border-radius:var(--r2); padding:12px; box-shadow:var(--shadow2);
+}
+.step-num {
+  width:26px; height:26px; border-radius:50%; flex-shrink:0;
+  background:linear-gradient(135deg,var(--pink),var(--lav));
+  color:#fff; font-size:12px; font-weight:900;
+  display:flex; align-items:center; justify-content:center;
+}
+.step-num.orange { background:linear-gradient(135deg,var(--peach),#ef4444) }
+.step-body { flex:1 }
+.step-body .stitle { font-size:13px; font-weight:900; color:var(--text); margin-bottom:3px }
+.step-body .sdesc { font-size:11px; color:var(--sub2); line-height:1.6 }
+.step-body .sdesc strong { color:var(--text); font-weight:700 }
+.highlight-box {
+  background:linear-gradient(135deg,#fce7f3,#ede9fe);
+  border:1.5px solid var(--border2); border-radius:var(--r2);
+  padding:12px 14px; margin-bottom:10px;
+  font-size:12px; color:var(--text); line-height:1.7;
+}
+.highlight-box strong { color:var(--pink2); font-weight:900 }
+.install-step {
+  background:#fff; border:1.5px solid var(--border);
+  border-radius:var(--r2); padding:13px 14px;
+  margin-bottom:8px; box-shadow:var(--shadow2);
+}
+.install-step .inum {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:22px; height:22px; border-radius:50%;
+  background:var(--sky); color:#fff; font-size:11px; font-weight:900;
+  margin-right:8px; flex-shrink:0;
+}
+.install-step p { font-size:12px; color:var(--sub2); line-height:1.6; display:flex; align-items:flex-start; gap:0 }
+.install-step .ititle { font-size:13px; font-weight:900; color:var(--text); margin-bottom:4px; display:flex; align-items:center }
+.icode {
+  background:#f1f5f9; border:1px solid var(--border);
+  border-radius:8px; padding:8px 12px; font-size:11px;
+  color:var(--sub2); margin-top:6px; line-height:1.6;
+  font-family: 'Courier New', monospace;
+}
+.duty-explain {
+  display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;
+}
+.duty-exp-item {
+  background:#fff; border:1.5px solid var(--border);
+  border-radius:var(--r2); padding:10px;
+  box-shadow:var(--shadow2);
+}
+.duty-exp-item .dlbl { font-size:11px; font-weight:900; margin-bottom:3px }
+.duty-exp-item .ddesc { font-size:10px; color:var(--sub2); line-height:1.5 }
+.emg-explain {
+  background:linear-gradient(135deg,#fff7ed,#fef3c7);
+  border:1.5px solid #fed7aa; border-radius:var(--r2);
+  padding:13px; margin-top:10px;
+}
+.emg-explain h4 { font-size:13px; font-weight:900; color:#92400e; margin-bottom:6px }
+.emg-explain p { font-size:11px; color:#92400e; line-height:1.7 }
+
+/* ── FAB ── */
+.fab {
+  position:fixed; bottom:calc(var(--sab)+22px); right:18px;
+  width:54px; height:54px; border-radius:50%;
+  background:linear-gradient(135deg,var(--pink),var(--lav));
+  border:none; color:#fff; font-size:26px; cursor:pointer;
+  box-shadow:0 4px 20px rgba(244,114,182,.5);
+  display:none; align-items:center; justify-content:center; z-index:100;
+}
+
+/* ── TOAST ── */
+.toast {
+  position:fixed; bottom:calc(var(--sab)+90px); left:50%; transform:translateX(-50%);
+  background:var(--text); color:#fff;
+  padding:10px 18px; border-radius:20px; font-size:13px; font-weight:700;
+  z-index:300; opacity:0; transition:opacity .25s; pointer-events:none; white-space:nowrap;
+}
+.toast.show { opacity:1 }
+
+.divider { height:1.5px; background:var(--border); margin:14px 0 }
+.section-lbl { font-size:11px; color:var(--sub2); font-weight:700; margin-bottom:6px }
+.scroll-hint { text-align:center; font-size:10px; color:var(--sub); padding:6px 0 }
+
+/* ── PRINT ── */
+.print-header { display:none }
+@media print {
+  body { background:#fff!important; color:#000!important }
+  .hdr,.tabs,.content>.btn-row,.content>.ver-row,.content>.legend,.content>.emg-banner,.scroll-hint,.fab,.toast { display:none!important }
+  .content { padding:0!important }
+  .twrap { border:1px solid #ccc!important; overflow:visible!important; box-shadow:none!important }
+  table { font-size:8px!important }
+  thead th { background:#fdf2f8!important; color:#333!important; border:1px solid #ddd!important; padding:3px 2px!important }
+  td { border:1px solid #eee!important; padding:2px 1px!important }
+  td.nc { background:#fafafa!important; color:#000!important; position:static!important; border:1px solid #ccc!important }
+  .badge { width:20px!important; height:20px!important; font-size:8px!important }
+  .bd{background:#fef3c7!important;color:#d97706!important}
+  .be{background:#d1fae5!important;color:#059669!important}
+  .bn{background:#ede9fe!important;color:#4f46e5!important}
+  .bo{background:#f1f5f9!important;color:#64748b!important}
+  .ba{background:#ffe4e6!important;color:#e11d48!important}
+  .bk{background:#ffedd5!important;color:#ea580c!important}
+  .bs{background:#f3e8ff!important;color:#7c3aed!important}
+  tr.stat { display:none!important }
+  tr.tl-row td.nc { border-left:3px solid var(--TL)!important }
+  .print-header { display:block!important; text-align:center; margin-bottom:10px }
+  .print-header h2 { font-size:15px; font-weight:bold; margin-bottom:4px }
+  .print-header .pmeta { font-size:10px; color:#666 }
+}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-top">
+    <div class="hdr-logo">
+      <span class="icon">🏥</span>
+      <div>
+        <h1>우리병동 듀티표</h1>
+        <span>간호사 근무 스케줄 관리</span>
+      </div>
+    </div>
+    <div class="mnav">
+      <button onclick="changeMonth(-1)">‹</button>
+      <span class="mlbl" id="mlbl"></span>
+      <button onclick="changeMonth(1)">›</button>
+    </div>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="showTab('duty',this)">📋 듀티표</div>
+  <div class="tab" onclick="showTab('request',this)">📝 휴무요청</div>
+  <div class="tab" onclick="showTab('holiday',this)">📅 공휴일</div>
+  <div class="tab" onclick="showTab('staff',this)">👥 직원</div>
+  <div class="tab" onclick="showTab('stats',this)">📊 통계</div>
+  <div class="tab" onclick="showTab('guide',this)">📖 사용법</div>
+</div>
+
+<div class="content" id="content"></div>
+<div class="toast" id="toast"></div>
+<button class="fab" id="fab" onclick="fabClick()">+</button>
+
+<div class="print-header" id="printHeader">
+  <h2 id="printTitle"></h2>
+  <div class="pmeta" id="printMeta"></div>
+</div>
+
+<script>
+// ══════════════════ 상수 ══════════════════
+const DOW = ['일','월','화','수','목','금','토'];
+const DUTY_LBL = {D:'데이',E:'이브닝',N:'나이트',OFF:'휴무',AL:'연차',KB:'기복휴가',SL:'병가','':'미정'};
+
+const DEFAULT_HOLIDAYS = [
+  '2026-01-01','2026-01-28','2026-01-29','2026-01-30',
+  '2026-03-01','2026-05-05','2026-06-06','2026-07-17',
+  '2026-08-17','2026-10-03','2026-10-09','2026-12-25',
+  '2025-01-01','2025-01-28','2025-01-29','2025-01-30',
+  '2025-03-01','2025-05-05','2025-05-06','2025-06-06',
+  '2025-08-15','2025-10-03','2025-10-05','2025-10-06','2025-10-07','2025-10-09','2025-12-25',
+];
+
+// ══════════════════ 스토어 ══════════════════
+const DEFAULT_STAFF = [
+  {id:1,name:'김창희',joinDate:'2018-03',isTL:true,remark:''},
+  {id:2,name:'김은정',joinDate:'2020-05',isTL:false,remark:''},
+  {id:3,name:'서은희',joinDate:'2021-02',isTL:false,remark:''},
+  {id:4,name:'정경미',joinDate:'2021-09',isTL:false,remark:''},
+  {id:5,name:'송은진',joinDate:'2022-03',isTL:false,remark:''},
+];
+
+function loadState(){
+  try{ const s=localStorage.getItem('nurseduty_v5'); if(s) return JSON.parse(s); }catch(e){}
+  return { staff:DEFAULT_STAFF, schedules:{}, requests:{}, remarks:{},
+           holidays:[...DEFAULT_HOLIDAYS], versions:{} };
+}
+function save(){ localStorage.setItem('nurseduty_v5', JSON.stringify(state)) }
+
+let state = loadState();
+if(!state.holidays) state.holidays = [...DEFAULT_HOLIDAYS];
+if(!state.versions) state.versions = {};
+
+let Y=new Date().getFullYear(), M=new Date().getMonth()+1;
+let activeTab='duty', modalEl=null;
+
+// ══════════════════ 헬퍼 ══════════════════
+function mk(y,m){ return `${y}-${String(m).padStart(2,'0')}` }
+function ds(y,m,d){ return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}` }
+function dim(y,m){ return new Date(y,m,0).getDate() }
+function isHol(s){ return state.holidays.includes(s) }
+function isSat(dt){ return dt.getDay()===6 }
+function isSun(dt){ return dt.getDay()===0 }
+function isWH(dt,s){ return isSat(dt)||isSun(dt)||isHol(s) }
+
+function getSc(y,m){
+  const k=mk(y,m); if(!state.schedules[k]) state.schedules[k]={};
+  state.staff.forEach(s=>{ if(!state.schedules[k][s.id]) state.schedules[k][s.id]={} });
+  return state.schedules[k];
+}
+function getRq(y,m){
+  const k=mk(y,m); if(!state.requests[k]) state.requests[k]={};
+  state.staff.forEach(s=>{ if(!state.requests[k][s.id]) state.requests[k][s.id]={offDays:[],alDays:[]} });
+  return state.requests[k];
+}
+function getRm(y,m){
+  const k=mk(y,m); if(!state.remarks[k]) state.remarks[k]={};
+  return state.remarks[k];
+}
+function getVer(y,m){
+  const k=mk(y,m);
+  if(!state.versions[k]) state.versions[k]={ver:0,updatedAt:null,emergency:false};
+  return state.versions[k];
+}
+function bumpVer(y,m){
+  const v=getVer(y,m); v.ver++; v.updatedAt=new Date().toISOString(); save();
+}
+function fmtDt(iso){
+  if(!iso) return '-';
+  const d=new Date(iso);
+  return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+// ══════════════════ 금지패턴 ══════════════════
+function getForbidReason(sc,sid,day,duty){
+  const p1 = day>1 ? sc[sid]?.[day-1]??'' : '';
+  const p2 = day>2 ? sc[sid]?.[day-2]??'' : '';
+  if(duty==='D' && p1==='N') return '나오데 금지 (나이트 다음날 데이)';
+  if(duty==='E' && p1==='N') return '나오이 금지 (나이트 다음날 이브닝)';
+  if(duty==='D' && p1==='E') return '이데 금지 (이브닝 다음날 데이)';
+  if(duty==='N' && p1==='N') return '나이트 연속 2개 금지';
+  if(duty==='E' && p1==='E' && p2==='E') return '이브닝 연속 3개 금지';
+  return null;
+}
+
+// 퐁당퐁당: 새 날 추가 시 기존 OFF와 하루 간격이 생기면 금지
+function isPongdang(offDays, newDay){
+  for(const d of offDays){
+    if(Math.abs(d-newDay)===2) return true;
+  }
+  return false;
+}
+
+// 토요일 D 횟수
+function satDCnt(sc,sid,y,m){
+  const D=dim(y,m); let n=0;
+  for(let d=1;d<=D;d++){ if(isSat(new Date(y,m-1,d)) && sc[sid]?.[d]==='D') n++; }
+  return n;
+}
+
+// ══════════════════ 자동생성 ══════════════════
+function generate(emergency=false){
+  const y=Y, m=M, D=dim(y,m);
+  const rq=getRq(y,m), sc={};
+  state.staff.forEach(s=>{ sc[s.id]={} });
+
+  const tl=state.staff.find(s=>s.isTL);
+  const nurses=state.staff.filter(s=>!s.isTL);
+
+  // 팀장: 주말/공휴일 OFF, 평일 D
+  if(tl){
+    for(let d=1;d<=D;d++){
+      const dt=new Date(y,m-1,d), dstr=ds(y,m,d);
+      sc[tl.id][d] = isWH(dt,dstr) ? 'OFF' : 'D';
+    }
+    rq[tl.id]?.alDays.forEach(d=>{ sc[tl.id][d]='AL' });
+  }
+
+  const cnt={};
+  nurses.forEach(n=>{ cnt[n.id]={D:0,E:0,N:0,OFF:0,AL:0} });
+
+  // 연차 우선
+  nurses.forEach(n=>{ rq[n.id]?.alDays.forEach(d=>{ sc[n.id][d]='AL'; cnt[n.id].AL++ }) });
+  // 지정 휴무
+  nurses.forEach(n=>{ rq[n.id]?.offDays.slice(0,2).forEach(d=>{ if(!sc[n.id][d]){sc[n.id][d]='OFF'; cnt[n.id].OFF++} }) });
+
+  const TGT_N   = emergency ? 3 : 8;
+  const TGT_OFF = emergency ? 12 : 10;
+
+  function canAssign(sc,n,d,duty){
+    if(sc[n.id][d]) return false;
+    if(getForbidReason(sc,n.id,d,duty)) return false;
+    return true;
+  }
+
+  function pickOne(duty, avail, d){
+    const cands = avail.filter(n=>canAssign(sc,n,d,duty));
+    if(!cands.length) return null;
+    cands.sort((a,b)=>{
+      let sa=cnt[a.id][duty]??0, sb=cnt[b.id][duty]??0;
+      // N 후 OFF 선호
+      if(duty==='OFF'){
+        if(d>1 && sc[a.id][d-1]==='N') sa-=50;
+        if(d>1 && sc[b.id][d-1]==='N') sb-=50;
+      }
+      // 토요일 D 분산
+      if(duty==='D' && isSat(new Date(y,m-1,d))){
+        sa += satDCnt(sc,a.id,y,m)*10;
+        sb += satDCnt(sc,b.id,y,m)*10;
+      }
+      return sa-sb;
+    });
+    return cands[0];
+  }
+
+  for(let d=1;d<=D;d++){
+    const avail=nurses.filter(n=>!sc[n.id][d]);
+    // N
+    const np=pickOne('N',avail,d);
+    if(np && cnt[np.id].N<TGT_N){ sc[np.id][d]='N'; cnt[np.id].N++; avail.splice(avail.indexOf(np),1) }
+    // E
+    const ep=pickOne('E',avail,d);
+    if(ep){ sc[ep.id][d]='E'; cnt[ep.id].E++; avail.splice(avail.indexOf(ep),1) }
+    // D (팀원 1명)
+    const dp=pickOne('D',avail,d);
+    if(dp){ sc[dp.id][d]='D'; cnt[dp.id].D++; avail.splice(avail.indexOf(dp),1) }
+    // 나머지 OFF
+    avail.forEach(n=>{ if(!sc[n.id][d]){ sc[n.id][d]='OFF'; cnt[n.id].OFF++ } });
+  }
+
+  // N 후 다음날 D/E 강제 OFF
+  nurses.forEach(n=>{
+    for(let d=2;d<=D;d++){
+      const p=sc[n.id][d-1], c=sc[n.id][d];
+      if(p==='N' && (c==='D'||c==='E')){
+        sc[n.id][d]='OFF'; cnt[n.id].OFF++;
+        if(c==='D') cnt[n.id].D=Math.max(0,cnt[n.id].D-1);
+        if(c==='E') cnt[n.id].E=Math.max(0,cnt[n.id].E-1);
+      }
+    }
+  });
+
+  state.schedules[mk(y,m)]=sc;
+  const v=getVer(y,m); v.ver++; v.updatedAt=new Date().toISOString(); v.emergency=emergency;
+  save();
+}
+
+// ══════════════════ 렌더 ══════════════════
+function render(){
+  document.getElementById('mlbl').textContent=`${Y}년 ${M}월`;
+  const c=document.getElementById('content');
+  const map={duty:renderDuty,request:renderReq,holiday:renderHoliday,staff:renderStaff,stats:renderStats,guide:renderGuide};
+  c.innerHTML=(map[activeTab]??renderDuty)();
+  attachEvents();
+}
+
+function bc(duty){ return {D:'bd',E:'be',N:'bn',OFF:'bo',AL:'ba',KB:'bk',SL:'bs','':'bx'}[duty]??'bx' }
+
+// ── 듀티표 ──
+function renderDuty(){
+  const D=dim(Y,M), sc=getSc(Y,M), rm=getRm(Y,M), ver=getVer(Y,M);
+  const nurses=state.staff.filter(s=>!s.isTL);
+  let h='';
+
+  h+=`<div class="ver-row">
+    <span class="ver-tag">📄 Ver.${ver.ver} · ${fmtDt(ver.updatedAt)}</span>
+    <button class="printbtn" onclick="doPrint()">🖨️ 인쇄·PDF</button>
+  </div>`;
+
+  if(ver.emergency){
+    h+=`<div class="emg-banner">
+      <div class="etxt">⚡ 긴급모드 적용 중<br><span style="font-weight:500;font-size:11px">N 최대 3개 · 데이 최소 1명 기준으로 생성됨</span></div>
+      <span class="emg-badge">긴급</span>
+    </div>`;
+  }
+
+  h+=`<div class="legend">
+    <span class="li"><span class="badge bd">D</span>데이</span>
+    <span class="li"><span class="badge be">E</span>이브닝</span>
+    <span class="li"><span class="badge bn">N</span>나이트</span>
+    <span class="li"><span class="badge bo">OFF</span>휴무</span>
+    <span class="li"><span class="badge ba">AL</span>연차</span>
+    <span class="li"><span class="badge bk">KB</span>기복</span>
+    <span class="li"><span class="badge bs">SL</span>병가</span>
+  </div>
+  <div class="btn-row">
+    <button class="genbtn" onclick="doGen(false)">✨ 자동 듀티 생성</button>
+    <button class="emgbtn" onclick="doGen(true)">⚡ 긴급</button>
+  </div>`;
+
+  h+=`<div class="twrap"><table><thead><tr><th class="nc">성명</th>`;
+  for(let d=1;d<=D;d++){
+    const dt=new Date(Y,M-1,d), dstr=ds(Y,M,d), dow=DOW[dt.getDay()];
+    let cls=''; if(isHol(dstr))cls='hol'; else if(isSun(dt))cls='sun'; else if(isSat(dt))cls='sat';
+    h+=`<th class="${cls}">${d}<br><small>${dow}</small></th>`;
+  }
+  h+=`<th>D</th><th>E</th><th>N</th><th>休</th><th>비고</th></tr></thead><tbody>`;
+
+  state.staff.forEach(s=>{
+    h+=`<tr class="${s.isTL?'tl-row':''}"><td class="nc">
+      <div>${s.name}</div>
+      <div class="jd">${s.joinDate}${s.isTL?'<br><span class="tltag">팀장👑</span>':''}</div>
+    </td>`;
+    let cnt={D:0,E:0,N:0,OFF:0,AL:0,KB:0,SL:0};
+    for(let d=1;d<=D;d++){
+      const dt=new Date(Y,M-1,d), dstr=ds(Y,M,d), duty=sc[s.id]?.[d]??'';
+      let cc='dc'; if(isHol(dstr))cc+=' ch'; else if(isSun(dt))cc+=' ch'; else if(isSat(dt))cc+=' cs';
+      h+=`<td class="${cc}" data-sid="${s.id}" data-day="${d}"><span class="badge ${bc(duty)}">${duty||'·'}</span></td>`;
+      if(cnt[duty]!==undefined) cnt[duty]++;
+    }
+    const offTot=cnt.OFF+cnt.AL+cnt.KB+cnt.SL;
+    h+=`<td class="cnt" style="color:var(--D)">${cnt.D||'-'}</td>`;
+    h+=`<td class="cnt" style="color:var(--E)">${cnt.E||'-'}</td>`;
+    h+=`<td class="cnt" style="color:var(--N)">${cnt.N||'-'}</td>`;
+    h+=`<td class="cnt" style="color:var(--OFF)">${offTot||'-'}</td>`;
+    h+=`<td class="rm"><input type="text" placeholder="메모" value="${rm[s.id]||''}" data-rid="${s.id}" maxlength="10"></td></tr>`;
+  });
+
+  ['D','E','N'].forEach(duty=>{
+    const col={D:'var(--D)',E:'var(--E)',N:'var(--N)'}[duty];
+    h+=`<tr class="stat"><td class="nc">${duty}인원</td>`;
+    for(let d=1;d<=D;d++){
+      let c=0;
+      if(duty==='D'){
+        const tl=state.staff.find(s=>s.isTL);
+        if(tl && sc[tl.id]?.[d]==='D') c++;
+        c+=nurses.filter(n=>sc[n.id]?.[d]==='D').length;
+      } else { c=nurses.filter(n=>sc[n.id]?.[d]===duty).length; }
+      h+=`<td style="color:${col}">${c||''}</td>`;
+    }
+    h+=`<td colspan="5"></td></tr>`;
+  });
+  h+=`</tbody></table></div><div class="scroll-hint">← 좌우로 스크롤하여 전체 확인 →</div>`;
+  return h;
+}
+
+// ── 휴무요청 ──
+function renderReq(){
+  const D=dim(Y,M), rq=getRq(Y,M);
+  let h=`<div class="card card-pink">
+    <div style="font-size:13px;font-weight:900;color:var(--pink2);margin-bottom:6px">📝 ${Y}년 ${M}월 휴무 요청</div>
+    <div style="font-size:12px;color:var(--sub2);line-height:1.7">
+      • 지정 휴무: <strong>최대 2일</strong> (퐁당퐁당 불가)<br>
+      • 연차/월차: 무제한<br>
+      • 기복·병가: 듀티표에서 직접 입력
+    </div>
+  </div>`;
+
+  state.staff.forEach(s=>{
+    const req=rq[s.id], offN=req.offDays.length, alN=req.alDays.length;
+    h+=`<div class="card">
+      <div class="rsec">
+        <h4>${s.name}${s.isTL?` <span class="tltag">팀장</span>`:''}
+          <span class="rcnt rcnt-off">OFF ${offN}/2</span>
+          <span class="rcnt">연차 ${alN}</span>
+        </h4>`;
+
+    if(!s.isTL){
+      h+=`<div class="section-lbl">🔘 지정 휴무 (최대 2일 · 퐁당 불가)</div><div class="daygrid">`;
+      for(let d=1;d<=D;d++){
+        const isOff=req.offDays.includes(d), isAl=req.alDays.includes(d);
+        const wouldP=!isOff&&isPongdang(req.offDays,d);
+        const dis=(!isOff&&offN>=2)||isAl||wouldP;
+        h+=`<button class="dbtn${isOff?' s-off':''}${wouldP?' pond':''}" ${dis?'disabled':''} onclick="toggleOff(${s.id},${d})">${d}</button>`;
+      }
+      h+=`</div>`;
+    }
+    h+=`<div class="section-lbl" style="margin-top:10px">🟥 연차/월차</div><div class="daygrid">`;
+    for(let d=1;d<=D;d++){
+      const isAl=req.alDays.includes(d), isOff=req.offDays.includes(d);
+      h+=`<button class="dbtn${isAl?' s-al':''}" ${isOff?'disabled':''} onclick="toggleAl(${s.id},${d})">${d}</button>`;
+    }
+    h+=`</div></div></div>`;
+  });
+  return h;
+}
+
+// ── 공휴일 ──
+function renderHoliday(){
+  const D=dim(Y,M);
+  const thisM=state.holidays.filter(h=>{const[hy,hm]=h.split('-');return parseInt(hy)===Y&&parseInt(hm)===M}).sort();
+  let h=`<div class="card card-pink">
+    <div style="font-size:13px;font-weight:900;color:var(--pink2);margin-bottom:6px">📅 공휴일 / 임시공휴일 관리</div>
+    <div style="font-size:12px;color:var(--sub2)">날짜를 탭하여 추가 · 태그를 탭하여 삭제<br>팀장은 공휴일 자동 휴무 처리</div>
+  </div>
+  <div class="section-lbl">${Y}년 ${M}월 등록된 공휴일</div>
+  <div class="hol-list">`;
+  thisM.forEach(hd=>{
+    const dt=new Date(hd),d=dt.getDate(),dow=DOW[dt.getDay()];
+    h+=`<div class="hol-tag" onclick="removeHol('${hd}')">${d}일(${dow}) ✕</div>`;
+  });
+  if(!thisM.length) h+=`<span style="font-size:12px;color:var(--sub)">등록된 공휴일 없음</span>`;
+  h+=`</div><div class="section-lbl" style="margin-top:14px">날짜 탭하여 추가/삭제</div><div class="daygrid">`;
+  for(let d=1;d<=D;d++){
+    const dstr=ds(Y,M,d), dt=new Date(Y,M-1,d), isH=isHol(dstr);
+    h+=`<button class="dbtn${isH?' s-al':''}" onclick="toggleHol('${dstr}')"
+      style="${isH?'border-color:var(--AL);color:var(--AL)':''}">${d}<br><small style="font-size:8px">${DOW[dt.getDay()]}</small></button>`;
+  }
+  h+=`</div>`;
+  return h;
+}
+
+// ── 직원 ──
+function renderStaff(){
+  let h=`<div style="display:flex;flex-direction:column;gap:0">`;
+  state.staff.forEach(s=>{
+    h+=`<div class="scard">
+      <div class="savt ${s.isTL?'tl':''}">${s.name.slice(-1)}</div>
+      <div class="sinf">
+        <div class="sname">${s.name}${s.isTL?' <span style="font-size:10px;color:var(--TL)">👑팀장</span>':''}</div>
+        <div class="smeta">입사 ${s.joinDate}</div>
+      </div>
+      <div class="sacts">
+        <button class="bsm" onclick="editStaff(${s.id})">편집</button>
+        <button class="bsm bdanger" onclick="delStaff(${s.id})">삭제</button>
+      </div>
+    </div>`;
+  });
+  h+=`</div>`;
+  return h;
+}
+
+// ── 통계 ──
+function renderStats(){
+  const D=dim(Y,M), sc=getSc(Y,M), ver=getVer(Y,M);
+  const nurses=state.staff.filter(s=>!s.isTL);
+  let tD=0,tE=0,tN=0,tOFF=0;
+  nurses.forEach(n=>{
+    for(let d=1;d<=D;d++){
+      const v=sc[n.id]?.[d];
+      if(v==='D')tD++; else if(v==='E')tE++; else if(v==='N')tN++;
+      else if(['OFF','AL','KB','SL'].includes(v))tOFF++;
+    }
+  });
+  let h=`<div class="card card-pink" style="margin-bottom:12px">
+    <div style="font-size:12px;font-weight:700;color:var(--pink2)">📄 Ver.${ver.ver} · ${fmtDt(ver.updatedAt)}${ver.emergency?' · <span style="color:var(--KB)">⚡긴급모드</span>':''}</div>
+  </div>
+  <div class="scards">
+    <div class="scard2"><div class="val" style="color:var(--D)">${tD}</div><div class="lbl">전체 데이</div></div>
+    <div class="scard2"><div class="val" style="color:var(--E)">${tE}</div><div class="lbl">전체 이브닝</div></div>
+    <div class="scard2"><div class="val" style="color:var(--N)">${tN}</div><div class="lbl">전체 나이트</div></div>
+    <div class="scard2"><div class="val" style="color:var(--OFF)">${tOFF}</div><div class="lbl">전체 휴무</div></div>
+  </div>
+  <div class="card card-pink" style="margin-bottom:12px;font-size:12px;color:var(--sub2)"><strong style="color:var(--text)">5인 체제 목표</strong>: 나이트 8개 / 휴무 10일</div>
+  <div style="display:flex;flex-direction:column;gap:0">`;
+
+  nurses.forEach(n=>{
+    let cnt={D:0,E:0,N:0,OFF:0,AL:0,KB:0,SL:0}, viols=[];
+    const satD=satDCnt(sc,n.id,Y,M);
+    for(let d=1;d<=D;d++){
+      const v=sc[n.id]?.[d]??'';
+      if(cnt[v]!==undefined) cnt[v]++;
+      if(d>1){
+        const p1=sc[n.id]?.[d-1]??'', p2=d>2?sc[n.id]?.[d-2]??'':'';
+        if(p1==='N'&&v==='D') viols.push(`${d}일 나오데⛔`);
+        if(p1==='N'&&v==='E') viols.push(`${d}일 나오이⛔`);
+        if(p1==='E'&&v==='D') viols.push(`${d}일 이데⛔`);
+        if(p1==='N'&&v==='N') viols.push(`${d}일 N연속⛔`);
+        if(p1==='E'&&v==='E'&&p2==='E') viols.push(`${d}일 E3연속⛔`);
+      }
+    }
+    const offTot=cnt.OFF+cnt.AL+cnt.KB+cnt.SL;
+    h+=`<div class="scard" style="flex-direction:column;align-items:flex-start;gap:10px">
+      <div style="display:flex;align-items:center;gap:10px;width:100%">
+        <div class="savt">${n.name.slice(-1)}</div>
+        <div class="sinf"><div class="sname">${n.name}</div><div class="smeta">${n.joinDate} · 토요일 D ${satD}회</div></div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <span class="badge bd" style="width:auto;padding:3px 8px">D ${cnt.D}</span>
+        <span class="badge be" style="width:auto;padding:3px 8px">E ${cnt.E}</span>
+        <span class="badge bn" style="width:auto;padding:3px 8px">N ${cnt.N}</span>
+        <span class="badge bo" style="width:auto;padding:3px 8px">OFF ${offTot}</span>
+        ${cnt.KB?`<span class="badge bk" style="width:auto;padding:3px 8px">KB ${cnt.KB}</span>`:''}
+        ${cnt.SL?`<span class="badge bs" style="width:auto;padding:3px 8px">SL ${cnt.SL}</span>`:''}
+      </div>
+      <div>
+        ${cnt.N===8?'<div class="ok">✅ 나이트 8/8 달성</div>':`<div class="warn">⚠️ 나이트 ${cnt.N}/8</div>`}
+        ${offTot===10?'<div class="ok">✅ 휴무 10/10 달성</div>':`<div class="warn">⚠️ 휴무 ${offTot}/10</div>`}
+        ${viols.length?`<div class="warn">${viols.join(' ')}</div>`:''}
+      </div>
+    </div>`;
+  });
+  h+=`</div>`;
+  return h;
+}
+
+// ── 사용설명서 ──
+function renderGuide(){
+  return `
+  <div class="card card-pink" style="margin-bottom:16px">
+    <div style="font-size:15px;font-weight:900;color:var(--pink2);margin-bottom:6px">📖 우리병동 듀티표 사용법</div>
+    <div style="font-size:12px;color:var(--sub2);line-height:1.7">매월 팀장이 작성 · 관리하는 병동 근무 스케줄 앱입니다</div>
+  </div>
+
+  <!-- 일반 사용 순서 -->
+  <div class="guide-section">
+    <h3>✅ 매월 정상 사용 순서</h3>
+    <div class="step-list">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="stitle">📅 공휴일 탭 → 이번달 공휴일 확인/추가</div>
+          <div class="sdesc">임시공휴일(예: 7월 17일)이 생기면 탭하여 추가하세요.<br>팀장은 공휴일 자동 휴무 처리됩니다.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="stitle">📝 휴무요청 탭 → 팀원별 휴무 입력</div>
+          <div class="sdesc"><strong>지정 휴무</strong>: 팀원당 최대 2일 선택 (퐁당퐁당 불가)<br><strong>연차/월차</strong>: 해당 날짜 탭하여 추가 (무제한)<br>기복·병가는 여기서 입력하지 않아도 됩니다.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="stitle">📋 듀티표 탭 → ✨ 자동 듀티 생성 버튼</div>
+          <div class="sdesc">버튼 탭 → 확인 → 자동 생성 완료!<br>휴무요청이 최우선 반영되고, 나머지는 자동 배정됩니다.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <div class="stitle">👀 생성 결과 확인 및 수동 수정</div>
+          <div class="sdesc">어색한 셀은 <strong>직접 탭</strong>하여 수정 가능합니다.<br>수정할 때마다 <strong>버전(Ver)</strong>이 자동으로 올라갑니다.<br>비고란에 메모도 입력할 수 있습니다.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-body">
+          <div class="stitle">🖨️ 인쇄·PDF 버튼으로 저장/공유</div>
+          <div class="sdesc">인쇄 화면에서 <strong>"PDF로 저장"</strong> 선택 시 A4 PDF 파일로 저장됩니다.<br>버전번호와 수정일시가 인쇄물에 자동 표시됩니다.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- 듀티 구분 설명 -->
+  <div class="guide-section">
+    <h3>🏷️ 듀티 종류</h3>
+    <div class="duty-explain">
+      <div class="duty-exp-item"><div class="dlbl" style="color:var(--D)">☀️ D 데이</div><div class="ddesc">팀장 + 팀원 1명<br>오전 근무</div></div>
+      <div class="duty-exp-item"><div class="dlbl" style="color:var(--E)">🌆 E 이브닝</div><div class="ddesc">팀원 1명<br>오후 근무</div></div>
+      <div class="duty-exp-item"><div class="dlbl" style="color:var(--N)">🌙 N 나이트</div><div class="ddesc">팀원 1명<br>야간 근무 (월 8회)</div></div>
+      <div class="duty-exp-item"><div class="dlbl" style="color:var(--OFF)">💤 OFF 휴무</div><div class="ddesc">일반 휴무<br>(월 10일 기준)</div></div>
+      <div class="duty-exp-item"><div class="dlbl" style="color:var(--AL)">📅 AL 연차</div><div class="ddesc">연차/월차<br>별도 신청</div></div>
+      <div class="duty-exp-item"><div class="dlbl" style="color:var(--KB)">🌸 KB 기복</div><div class="ddesc">경조사 휴가<br>(부모·결혼 등)</div></div>
+      <div class="duty-exp-item"><div class="dlbl" style="color:var(--SL)">🏥 SL 병가</div><div class="ddesc">병가<br>갑작스런 발생</div></div>
+    </div>
+    <div style="font-size:11px;color:var(--sub2);margin-top:10px;line-height:1.6;background:#f8fafc;border-radius:10px;padding:10px">
+      💡 <strong>KB(기복)·SL(병가)</strong>는 갑작스럽게 발생하므로 듀티표 셀을 직접 탭하여 변경하세요.<br>연차·일반 휴무와 별개로 카운트됩니다.
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- 긴급 모드 설명 -->
+  <div class="guide-section">
+    <h3>⚡ 긴급모드와 일반 자동생성 차이</h3>
+    <div class="emg-explain">
+      <h4>⚡ 긴급모드를 사용하는 경우</h4>
+      <p>팀원 중 1명이 갑작스러운 기복·병가로 빠지게 되어<br>평소 기준(N=8, OFF=10)으로는 듀티 배정이 불가능할 때 사용합니다.</p>
+      <br>
+      <p><strong>긴급모드 적용 기준:</strong><br>
+      • 나이트(N) 최대 3개까지만 배정<br>
+      • 데이(D) 최소 1명 확보 우선<br>
+      • 생성 후 듀티표 상단에 <span style="background:linear-gradient(135deg,#fb923c,#ef4444);color:#fff;font-size:9px;padding:1px 6px;border-radius:8px">긴급</span> 배너 표시<br>
+      • 통계 탭에도 긴급모드 여부 기록</p>
+    </div>
+    <div style="margin-top:10px">
+      <div class="step">
+        <div class="step-num orange">1</div>
+        <div class="step-body">
+          <div class="stitle">빠지는 팀원의 날짜 연차/기복 입력</div>
+          <div class="sdesc">휴무요청 탭 또는 듀티표 셀 직접 수정</div>
+        </div>
+      </div>
+      <div class="step" style="margin-top:8px">
+        <div class="step-num orange">2</div>
+        <div class="step-body">
+          <div class="stitle">듀티표 탭 → ⚡ 긴급 버튼 탭</div>
+          <div class="sdesc">긴급 기준(N 최대 3·D 최소 1)으로 재생성</div>
+        </div>
+      </div>
+      <div class="step" style="margin-top:8px">
+        <div class="step-num orange">3</div>
+        <div class="step-body">
+          <div class="stitle">필요시 셀 직접 수정 후 인쇄/공유</div>
+          <div class="sdesc">버전이 자동으로 올라가 수정 이력 관리 가능</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- 아이폰 설치 -->
+  <div class="guide-section">
+    <h3>📱 아이폰 홈 화면 설치 방법</h3>
+    <div class="highlight-box">
+      <strong>이 앱은 인터넷 없이도 사용 가능합니다!</strong><br>
+      아래 순서대로 홈 화면에 설치하면 일반 앱처럼 열립니다.
+    </div>
+
+    <div class="install-step">
+      <div class="ititle"><span class="inum">1</span>파일 받기</div>
+      <p>이메일에 첨부된 <strong>nurse-duty.html</strong> 파일을 탭하여 열기</p>
+    </div>
+    <div class="install-step">
+      <div class="ititle"><span class="inum">2</span>Safari로 열기</div>
+      <p>파일을 열 앱 선택 화면에서 반드시 <strong>Safari</strong>를 선택하세요<br><small style="color:var(--sub)">(크롬, 네이버 앱 등 다른 브라우저는 홈 화면 설치 불가)</small></p>
+    </div>
+    <div class="install-step">
+      <div class="ititle"><span class="inum">3</span>공유 버튼 탭</div>
+      <p>Safari 하단 가운데 <strong>□↑ (공유) 버튼</strong> 탭</p>
+    </div>
+    <div class="install-step">
+      <div class="ititle"><span class="inum">4</span>"홈 화면에 추가" 선택</div>
+      <p>스크롤하여 <strong>"홈 화면에 추가"</strong> 항목 탭<br><small style="color:var(--sub)">(보이지 않으면 아래로 더 스크롤)</small></p>
+    </div>
+    <div class="install-step">
+      <div class="ititle"><span class="inum">5</span>이름 확인 후 추가</div>
+      <p><strong>"우리병동 듀티표"</strong>로 표시되는지 확인 후 오른쪽 위 <strong>"추가"</strong> 탭</p>
+    </div>
+    <div class="install-step">
+      <div class="ititle"><span class="inum" style="background:var(--mint)">✓</span>완료!</div>
+      <p>홈 화면에 🏥 아이콘이 생성됩니다.<br>탭하면 앱처럼 전체 화면으로 열립니다.</p>
+      <div class="icode">⚠️ 주의: 데이터는 이 폰의 Safari에만 저장됩니다.<br>앱을 삭제하면 모든 데이터가 초기화됩니다.</div>
+    </div>
+  </div>`;
+}
+
+// ══════════════════ 이벤트 ══════════════════
+function attachEvents(){
+  document.querySelectorAll('.dc').forEach(cell=>{
+    cell.addEventListener('click',()=>{
+      showDutyPicker(parseInt(cell.dataset.sid), parseInt(cell.dataset.day));
+    });
+  });
+  document.querySelectorAll('input[data-rid]').forEach(inp=>{
+    inp.addEventListener('change',()=>{
+      const rm=getRm(Y,M); rm[inp.dataset.rid]=inp.value; save();
+    });
+  });
+}
+
+function showDutyPicker(sid,day){
+  const s=state.staff.find(x=>x.id===sid);
+  const sc=getSc(Y,M);
+  const cur=sc[sid]?.[day]??'';
+  const p1=day>1?sc[sid]?.[day-1]??'':'';
+  const p2=day>2?sc[sid]?.[day-2]??'':'';
+  const dt=new Date(Y,M-1,day), dow=DOW[dt.getDay()];
+
+  const opts=s.isTL?['D','OFF','AL','KB','SL']:['D','E','N','OFF','AL','KB','SL'];
+  let warns=[];
+  if(p1==='N') warns.push('⚠️ 전날 나이트 → D/E/N 금지');
+  if(p1==='E') warns.push('⚠️ 전날 이브닝 → D 금지');
+  if(p1==='E'&&p2==='E') warns.push('⚠️ 이브닝 연속 3개 금지');
+
+  let h=`<div class="mhandle"></div>
+    <h3>${s.name} · ${M}월 ${day}일(${dow})</h3>
+    ${warns.map(w=>`<div class="warn" style="margin-bottom:6px">${w}</div>`).join('')}
+    <div class="dpicker">`;
+
+  opts.forEach(d=>{
+    const reason=getForbidReason(sc,sid,day,d);
+    h+=`<div class="dopt dopt-${d} ${cur===d?'sel':''} ${reason?'forbidden':''}"
+      onclick="${reason?`showToast('${reason}')`:`setDuty(${sid},${day},'${d}')`}">
+      ${d}<br><small style="font-size:8px">${DUTY_LBL[d]}</small>
+    </div>`;
+  });
+  h+=`<div class="dopt dopt-x ${cur===''?'sel':''}" onclick="setDuty(${sid},${day},'')">·<br><small style="font-size:8px">미정</small></div>
+    </div>
+    <div style="background:#f8fafc;border-radius:10px;padding:10px;font-size:11px;color:var(--sub2);margin-bottom:12px;line-height:1.6">
+      💡 <strong>KB</strong>=기복휴가(경조사) · <strong>SL</strong>=병가<br>연차·일반휴무와 별개 카운트
+    </div>
+    <button class="bcan" onclick="closeModal()">닫기</button>`;
+  showModal(h);
+}
+
+function setDuty(sid,day,duty){
+  const sc=getSc(Y,M);
+  sc[sid][day]=duty;
+  bumpVer(Y,M);
+  closeModal(); render();
+  showToast(`${state.staff.find(s=>s.id===sid)?.name} ${day}일 → ${duty||'미정'}`);
+}
+
+function toggleOff(sid,day){
+  const rq=getRq(Y,M), req=rq[sid];
+  const idx=req.offDays.indexOf(day);
+  if(idx>-1){ req.offDays.splice(idx,1); }
+  else{
+    if(req.offDays.length>=2){ showToast('지정 휴무는 최대 2일'); return; }
+    if(isPongdang(req.offDays,day)){ showToast('퐁당퐁당 패턴은 불가합니다 🙅'); return; }
+    req.offDays.push(day);
+  }
+  save(); render();
+}
+function toggleAl(sid,day){
+  const rq=getRq(Y,M), req=rq[sid];
+  const idx=req.alDays.indexOf(day);
+  if(idx>-1) req.alDays.splice(idx,1); else req.alDays.push(day);
+  save(); render();
+}
+function toggleHol(dstr){
+  const idx=state.holidays.indexOf(dstr);
+  if(idx>-1) state.holidays.splice(idx,1); else state.holidays.push(dstr);
+  save(); render();
+}
+function removeHol(dstr){ state.holidays=state.holidays.filter(h=>h!==dstr); save(); render(); }
+
+function doGen(emergency){
+  const msg=emergency
+    ? '⚡ 긴급모드로 생성합니다.\nN 최대 3개 · D 최소 1명 기준으로 배정됩니다.\n기존 듀티가 덮어쓰여집니다.'
+    : '✨ 자동 듀티를 생성합니다.\n기존 듀티가 덮어쓰여집니다.';
+  if(!confirm(msg)) return;
+  generate(emergency); render();
+  showToast(emergency ? '⚡ 긴급 듀티 생성 완료' : '✨ 듀티 생성 완료');
+}
+
+function doPrint(){
+  const ver=getVer(Y,M);
+  document.getElementById('printTitle').textContent=`${Y}년 ${M}월 병동 근무표`;
+  document.getElementById('printMeta').textContent=
+    `Ver.${ver.ver}  |  수정: ${fmtDt(ver.updatedAt)}${ver.emergency?' | ⚡긴급모드':''}`;
+  document.getElementById('printHeader').style.display='block';
+  window.print();
+  setTimeout(()=>{ document.getElementById('printHeader').style.display='none'; },1500);
+}
+
+function editStaff(id){
+  const s=state.staff.find(x=>x.id===id);
+  showModal(`<div class="mhandle"></div><h3>✏️ 직원 편집</h3>
+    <div class="fg"><label>성명</label><input id="e_n" value="${s.name}"></div>
+    <div class="fg"><label>입사년월 (YYYY-MM)</label><input id="e_j" value="${s.joinDate}" placeholder="2024-01"></div>
+    <div class="fg"><label>구분</label><select id="e_t">
+      <option value="0" ${!s.isTL?'selected':''}>일반 간호사</option>
+      <option value="1" ${s.isTL?'selected':''}>팀장 👑</option>
+    </select></div>
+    <button class="bpri" onclick="saveStaff(${id})">저장</button>
+    <button class="bcan" onclick="closeModal()">취소</button>`);
+}
+function saveStaff(id){
+  const s=state.staff.find(x=>x.id===id);
+  s.name=document.getElementById('e_n').value.trim()||s.name;
+  s.joinDate=document.getElementById('e_j').value.trim()||s.joinDate;
+  s.isTL=document.getElementById('e_t').value==='1';
+  save(); closeModal(); render(); showToast('저장 완료 ✅');
+}
+function delStaff(id){
+  const s=state.staff.find(x=>x.id===id);
+  if(!confirm(`${s.name}을(를) 삭제하시겠습니까?`)) return;
+  state.staff=state.staff.filter(x=>x.id!==id);
+  save(); render(); showToast('삭제 완료');
+}
+function showAddStaff(){
+  showModal(`<div class="mhandle"></div><h3>👤 직원 추가</h3>
+    <div class="fg"><label>성명</label><input id="n_n" placeholder="홍길동"></div>
+    <div class="fg"><label>입사년월 (YYYY-MM)</label><input id="n_j" placeholder="2024-01"></div>
+    <div class="fg"><label>구분</label><select id="n_t">
+      <option value="0">일반 간호사</option>
+      <option value="1">팀장 👑</option>
+    </select></div>
+    <button class="bpri" onclick="addStaff()">추가</button>
+    <button class="bcan" onclick="closeModal()">취소</button>`);
+}
+function addStaff(){
+  const name=document.getElementById('n_n').value.trim();
+  if(!name){ showToast('이름을 입력해주세요'); return; }
+  state.staff.push({
+    id:Date.now(), name,
+    joinDate:document.getElementById('n_j').value.trim()||'미상',
+    isTL:document.getElementById('n_t').value==='1', remark:''
+  });
+  save(); closeModal(); render(); showToast('추가 완료 ✅');
+}
+
+function showModal(html){
+  closeModal();
+  const ov=document.createElement('div');
+  ov.className='moverlay';
+  ov.innerHTML=`<div class="modal">${html}</div>`;
+  ov.addEventListener('click',e=>{ if(e.target===ov) closeModal() });
+  document.body.appendChild(ov); modalEl=ov;
+}
+function closeModal(){ if(modalEl){ modalEl.remove(); modalEl=null } }
+
+function showTab(tab,el){
+  activeTab=tab;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('fab').style.display=tab==='staff'?'flex':'none';
+  render();
+}
+function fabClick(){ showAddStaff() }
+function changeMonth(delta){
+  M+=delta; if(M>12){M=1;Y++;} if(M<1){M=12;Y--;} render();
+}
+
+let tt;
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(tt); tt=setTimeout(()=>t.classList.remove('show'),2200);
+}
+
+render();
+</script>
+</body>
+</html>
