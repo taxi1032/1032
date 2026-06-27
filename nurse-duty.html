@@ -499,6 +499,7 @@ td.cnt { font-size:10px; font-weight:900; min-width:22px }
 // ══════════════════ 상수 ══════════════════
 const DOW = ['일','월','화','수','목','금','토'];
 const DUTY_LBL = {D:'데이',E:'이브닝',N:'나이트',OFF:'휴무',AL:'연차',KB:'기복휴가',SL:'병가','':'미정'};
+const DUTY_DISP = {D:'D',E:'E',N:'N',OFF:'/',AL:'연',KB:'기',SL:'병','':'·'};
 
 const DEFAULT_HOLIDAYS = [
   '2026-01-01','2026-01-28','2026-01-29','2026-01-30',
@@ -521,13 +522,49 @@ const DEFAULT_STAFF = [
 function loadState(){
   try{ const s=localStorage.getItem('nurseduty_v5'); if(s) return JSON.parse(s); }catch(e){}
   return { staff:DEFAULT_STAFF, schedules:{}, requests:{}, remarks:{},
-           holidays:[...DEFAULT_HOLIDAYS], versions:{} };
+           holidays:[...DEFAULT_HOLIDAYS], versions:{},
+           memos:{},
+           satRotIdx:{},
+           annualLeave:{}, // staffId -> { total:15, startYM:'2026-07' }
+  };
 }
 function save(){ localStorage.setItem('nurseduty_v5', JSON.stringify(state)) }
 
 let state = loadState();
 if(!state.holidays) state.holidays = [...DEFAULT_HOLIDAYS];
 if(!state.versions) state.versions = {};
+if(!state.memos) state.memos = {};
+if(!state.satRotIdx) state.satRotIdx = {};
+if(!state.annualLeave) state.annualLeave = {};
+
+// 연차 정보 가져오기 (없으면 기본 15일 / 2026-07 시작)
+function getAL(sid){
+  if(!state.annualLeave[sid]) state.annualLeave[sid]={total:15,startYM:'2026-07'};
+  return state.annualLeave[sid];
+}
+
+// 시작월부터 현재월까지 사용한 연차 합산
+function usedAL(sid){
+  const al=getAL(sid);
+  const [sy,sm]=al.startYM.split('-').map(Number);
+  let used=0;
+  // 시작월부터 현재월까지 순회
+  let cy=sy,cm=sm;
+  while(cy<Y||(cy===Y&&cm<=M)){
+    const sc=getSc(cy,cm);
+    const D=dim(cy,cm);
+    for(let d=1;d<=D;d++){
+      if(sc[sid]?.[d]==='AL') used++;
+    }
+    // 요청도 합산 (아직 자동생성 안된 경우)
+    cm++; if(cm>12){cm=1;cy++;}
+  }
+  return used;
+}
+
+function remainAL(sid){
+  return Math.max(0, getAL(sid).total - usedAL(sid));
+}
 
 let Y=new Date().getFullYear(), M=new Date().getMonth()+1;
 let activeTab='duty', modalEl=null;
@@ -596,18 +633,30 @@ function satDCnt(sc,sid,y,m){
   return n;
 }
 
+// 월별 메모 (작성자/특이사항)
+function getMemo(y,m){
+  const k=mk(y,m);
+  if(!state.memos[k]) state.memos[k]={writer:'',note:''};
+  return state.memos[k];
+}
+
 // ══════════════════ 자동생성 ══════════════════
 function generate(emergency=false){
   const y=Y, m=M, D=dim(y,m);
-  const rq=getRq(y,m), sc={};
-  state.staff.forEach(s=>{ sc[s.id]={} });
+  const rq=getRq(y,m);
+  const existSc=getSc(y,m); // 기존 수기 입력 보존용
+
+  // 기존 스케줄 복사 (수기 입력 유지)
+  const sc={};
+  state.staff.forEach(s=>{ sc[s.id]={...existSc[s.id]} });
 
   const tl=state.staff.find(s=>s.isTL);
   const nurses=state.staff.filter(s=>!s.isTL);
 
-  // 팀장: 주말/공휴일 OFF, 평일 D
+  // 팀장: 수기 입력 없는 날만 자동 배정
   if(tl){
     for(let d=1;d<=D;d++){
+      if(sc[tl.id][d]) continue; // 수기 입력된 날 건드리지 않음
       const dt=new Date(y,m-1,d), dstr=ds(y,m,d);
       sc[tl.id][d] = isWH(dt,dstr) ? 'OFF' : 'D';
     }
@@ -615,12 +664,27 @@ function generate(emergency=false){
   }
 
   const cnt={};
-  nurses.forEach(n=>{ cnt[n.id]={D:0,E:0,N:0,OFF:0,AL:0} });
+  nurses.forEach(n=>{
+    cnt[n.id]={D:0,E:0,N:0,OFF:0,AL:0};
+    // 기존 수기 입력 카운트 반영
+    for(let d=1;d<=D;d++){
+      const v=sc[n.id][d];
+      if(v && cnt[n.id][v]!==undefined) cnt[n.id][v]++;
+    }
+  });
 
-  // 연차 우선
-  nurses.forEach(n=>{ rq[n.id]?.alDays.forEach(d=>{ sc[n.id][d]='AL'; cnt[n.id].AL++ }) });
-  // 지정 휴무
-  nurses.forEach(n=>{ rq[n.id]?.offDays.slice(0,2).forEach(d=>{ if(!sc[n.id][d]){sc[n.id][d]='OFF'; cnt[n.id].OFF++} }) });
+  // 연차 우선 (수기 없는 날만)
+  nurses.forEach(n=>{
+    rq[n.id]?.alDays.forEach(d=>{
+      if(!sc[n.id][d]){ sc[n.id][d]='AL'; cnt[n.id].AL++ }
+    });
+  });
+  // 지정 휴무 (수기 없는 날만)
+  nurses.forEach(n=>{
+    rq[n.id]?.offDays.slice(0,2).forEach(d=>{
+      if(!sc[n.id][d]){ sc[n.id][d]='OFF'; cnt[n.id].OFF++ }
+    });
+  });
 
   const TGT_N   = emergency ? 3 : 8;
   const TGT_OFF = emergency ? 12 : 10;
@@ -631,17 +695,23 @@ function generate(emergency=false){
     return true;
   }
 
-  function pickOne(duty, avail, d){
-    const cands = avail.filter(n=>canAssign(sc,n,d,duty));
+  // 금지패턴 무시하고 강제 배정 (커버리지 우선)
+  function canAssignForce(sc,n,d,duty){
+    if(sc[n.id][d]) return false;
+    // KB, SL, AL 은 강제 배정 불가
+    if(['KB','SL','AL'].includes(sc[n.id][d])) return false;
+    return true;
+  }
+
+  function pickOne(duty, avail, d, force=false){
+    const cands = avail.filter(n=> force ? canAssignForce(sc,n,d,duty) : canAssign(sc,n,d,duty));
     if(!cands.length) return null;
     cands.sort((a,b)=>{
       let sa=cnt[a.id][duty]??0, sb=cnt[b.id][duty]??0;
-      // N 후 OFF 선호
       if(duty==='OFF'){
         if(d>1 && sc[a.id][d-1]==='N') sa-=50;
         if(d>1 && sc[b.id][d-1]==='N') sb-=50;
       }
-      // 토요일 D 분산
       if(duty==='D' && isSat(new Date(y,m-1,d))){
         sa += satDCnt(sc,a.id,y,m)*10;
         sb += satDCnt(sc,b.id,y,m)*10;
@@ -651,32 +721,117 @@ function generate(emergency=false){
     return cands[0];
   }
 
+  // 고참 순서 (팀장 제외, 입사 순)
+  const seniorOrder = [...nurses].sort((a,b)=> a.joinDate.localeCompare(b.joinDate));
+  // 토요일 순환 인덱스
+  const satKey = mk(y,m);
+  if(!state.satRotIdx[satKey]) state.satRotIdx[satKey]=0;
+  let satRotCur = state.satRotIdx[satKey];
+
   for(let d=1;d<=D;d++){
     const avail=nurses.filter(n=>!sc[n.id][d]);
-    // N
+    const dt=new Date(y,m-1,d);
+    const dstr=ds(y,m,d);
+
+    // 팀장 부재 여부 (OFF/AL/KB/SL)
+    const tlAbsent = tl && ['OFF','AL','KB','SL'].includes(sc[tl.id]?.[d]);
+
+    // N 배정
     const np=pickOne('N',avail,d);
     if(np && cnt[np.id].N<TGT_N){ sc[np.id][d]='N'; cnt[np.id].N++; avail.splice(avail.indexOf(np),1) }
-    // E
+    // E 배정
     const ep=pickOne('E',avail,d);
     if(ep){ sc[ep.id][d]='E'; cnt[ep.id].E++; avail.splice(avail.indexOf(ep),1) }
-    // D (팀원 1명)
-    const dp=pickOne('D',avail,d);
-    if(dp){ sc[dp.id][d]='D'; cnt[dp.id].D++; avail.splice(avail.indexOf(dp),1) }
+
+    // D 배정
+    if(tlAbsent && isSat(dt)){
+      // 토요일 + 팀장 부재 → 전 근무자 순환
+      const satCands = avail.filter(n=>canAssign(sc,n,d,'D'));
+      if(satCands.length){
+        // 순환 인덱스로 선택
+        const pick = seniorOrder.filter(n=>satCands.includes(n));
+        const chosen = pick[satRotCur % Math.max(pick.length,1)] ?? satCands[0];
+        sc[chosen.id][d]='D'; cnt[chosen.id].D++;
+        avail.splice(avail.indexOf(chosen),1);
+        satRotCur++;
+      }
+    } else if(tlAbsent && !isSat(dt)){
+      // 평일 + 팀장 부재 → 고참(김은정) 우선 D 배정
+      const senior = seniorOrder.find(n=>canAssign(sc,n,d,'D') && avail.includes(n));
+      if(senior){
+        sc[senior.id][d]='D'; cnt[senior.id].D++;
+        avail.splice(avail.indexOf(senior),1);
+      } else {
+        const dp=pickOne('D',avail,d);
+        if(dp){ sc[dp.id][d]='D'; cnt[dp.id].D++; avail.splice(avail.indexOf(dp),1) }
+      }
+    } else {
+      // 정상: 팀원 1명 D 배정
+      const dp=pickOne('D',avail,d);
+      if(dp){ sc[dp.id][d]='D'; cnt[dp.id].D++; avail.splice(avail.indexOf(dp),1) }
+    }
+
     // 나머지 OFF
     avail.forEach(n=>{ if(!sc[n.id][d]){ sc[n.id][d]='OFF'; cnt[n.id].OFF++ } });
   }
+  // 토요일 순환 인덱스 저장
+  state.satRotIdx[satKey] = satRotCur;
 
-  // N 후 다음날 D/E 강제 OFF
+  // N 후 다음날 D/E 강제 OFF (수기 입력 아닌 경우만)
   nurses.forEach(n=>{
     for(let d=2;d<=D;d++){
       const p=sc[n.id][d-1], c=sc[n.id][d];
       if(p==='N' && (c==='D'||c==='E')){
+        // 수기 입력된 날이면 건드리지 않음
+        if(existSc[n.id]?.[d]) continue;
         sc[n.id][d]='OFF'; cnt[n.id].OFF++;
         if(c==='D') cnt[n.id].D=Math.max(0,cnt[n.id].D-1);
         if(c==='E') cnt[n.id].E=Math.max(0,cnt[n.id].E-1);
       }
     }
   });
+
+  // ── 커버리지 보완: D/E/N 공백 날짜 강제 채우기 ──
+  for(let d=1;d<=D;d++){
+    const availAll=nurses.filter(n=>!['KB','SL','AL'].includes(sc[n.id][d]));
+
+    // N 공백 보완
+    const hasN=nurses.some(n=>sc[n.id][d]==='N');
+    if(!hasN && !emergency){
+      const fp=availAll.filter(n=>!sc[n.id][d]||sc[n.id][d]==='OFF');
+      // OFF 중 나오데/나오이 아닌 사람 우선
+      const safe=fp.filter(n=>!getForbidReason(sc,n.id,d,'N'));
+      const pick=safe.length?safe[0]:fp[0];
+      if(pick){
+        if(sc[pick.id][d]==='OFF') cnt[pick.id].OFF=Math.max(0,cnt[pick.id].OFF-1);
+        sc[pick.id][d]='N'; cnt[pick.id].N++;
+      }
+    }
+
+    // E 공백 보완
+    const hasE=nurses.some(n=>sc[n.id][d]==='E');
+    if(!hasE){
+      const fp=availAll.filter(n=>!sc[n.id][d]||sc[n.id][d]==='OFF');
+      const safe=fp.filter(n=>!getForbidReason(sc,n.id,d,'E'));
+      const pick=safe.length?safe[0]:fp[0];
+      if(pick){
+        if(sc[pick.id][d]==='OFF') cnt[pick.id].OFF=Math.max(0,cnt[pick.id].OFF-1);
+        sc[pick.id][d]='E'; cnt[pick.id].E++;
+      }
+    }
+
+    // D 공백 보완 (팀원)
+    const hasD=nurses.some(n=>sc[n.id][d]==='D');
+    if(!hasD){
+      const fp=availAll.filter(n=>!sc[n.id][d]||sc[n.id][d]==='OFF');
+      const safe=fp.filter(n=>!getForbidReason(sc,n.id,d,'D'));
+      const pick=safe.length?safe[0]:fp[0];
+      if(pick){
+        if(sc[pick.id][d]==='OFF') cnt[pick.id].OFF=Math.max(0,cnt[pick.id].OFF-1);
+        sc[pick.id][d]='D'; cnt[pick.id].D++;
+      }
+    }
+  }
 
   state.schedules[mk(y,m)]=sc;
   const v=getVer(y,m); v.ver++; v.updatedAt=new Date().toISOString(); v.emergency=emergency;
@@ -698,11 +853,33 @@ function bc(duty){ return {D:'bd',E:'be',N:'bn',OFF:'bo',AL:'ba',KB:'bk',SL:'bs'
 function renderDuty(){
   const D=dim(Y,M), sc=getSc(Y,M), rm=getRm(Y,M), ver=getVer(Y,M);
   const nurses=state.staff.filter(s=>!s.isTL);
+  const memo=getMemo(Y,M);
   let h='';
 
   h+=`<div class="ver-row">
     <span class="ver-tag">📄 Ver.${ver.ver} · ${fmtDt(ver.updatedAt)}</span>
     <button class="printbtn" onclick="doPrint()">🖨️ 인쇄·PDF</button>
+  </div>`;
+
+  // 작성자/특이사항 기입란
+  h+=`<div class="card" style="margin-bottom:10px;padding:12px 14px">
+    <div style="font-size:12px;font-weight:900;color:var(--pink2);margin-bottom:8px">✍️ 근무표 정보</div>
+    <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+      <label style="font-size:11px;color:var(--sub2);font-weight:700;white-space:nowrap;min-width:44px">작성자</label>
+      <input type="text" id="writerInput" placeholder="담당자 이름 입력"
+        value="${memo.writer||''}"
+        style="flex:1;background:#fdf0f5;border:1.5px solid var(--border2);color:var(--text);
+               padding:8px 11px;border-radius:9px;font-size:13px;font-family:inherit;outline:none"
+        oninput="saveMemo()" maxlength="10">
+    </div>
+    <div style="display:flex;gap:8px;align-items:flex-start">
+      <label style="font-size:11px;color:var(--sub2);font-weight:700;white-space:nowrap;min-width:44px;padding-top:8px">특이사항</label>
+      <textarea id="noteInput" placeholder="이번달 특이사항, 인수인계 등 자유 입력"
+        style="flex:1;background:#fdf0f5;border:1.5px solid var(--border2);color:var(--text);
+               padding:8px 11px;border-radius:9px;font-size:12px;font-family:inherit;outline:none;
+               resize:none;height:60px;line-height:1.5"
+        oninput="saveMemo()" maxlength="200">${memo.note||''}</textarea>
+    </div>
   </div>`;
 
   if(ver.emergency){
@@ -716,10 +893,10 @@ function renderDuty(){
     <span class="li"><span class="badge bd">D</span>데이</span>
     <span class="li"><span class="badge be">E</span>이브닝</span>
     <span class="li"><span class="badge bn">N</span>나이트</span>
-    <span class="li"><span class="badge bo">OFF</span>휴무</span>
-    <span class="li"><span class="badge ba">AL</span>연차</span>
-    <span class="li"><span class="badge bk">KB</span>기복</span>
-    <span class="li"><span class="badge bs">SL</span>병가</span>
+    <span class="li"><span class="badge bo">/</span>휴무</span>
+    <span class="li"><span class="badge ba">연</span>연차</span>
+    <span class="li"><span class="badge bk">기</span>기복</span>
+    <span class="li"><span class="badge bs">병</span>병가</span>
   </div>
   <div class="btn-row">
     <button class="genbtn" onclick="doGen(false)">✨ 자동 듀티 생성</button>
@@ -735,15 +912,22 @@ function renderDuty(){
   h+=`<th>D</th><th>E</th><th>N</th><th>休</th><th>비고</th></tr></thead><tbody>`;
 
   state.staff.forEach(s=>{
+    const alInfo = !s.isTL ? getAL(s.id) : null;
+    const alUsed = !s.isTL ? usedAL(s.id) : 0;
+    const alRemain = !s.isTL ? Math.max(0, (alInfo?.total||15) - alUsed) : 0;
+    const nameDisp = s.isTL ? `${s.name} 팀장` : s.name;
+
     h+=`<tr class="${s.isTL?'tl-row':''}"><td class="nc">
-      <div>${s.name}</div>
-      <div class="jd">${s.joinDate}${s.isTL?'<br><span class="tltag">팀장👑</span>':''}</div>
+      <div style="font-weight:900">${nameDisp}</div>
+      <div class="jd">${s.joinDate}</div>
+      ${!s.isTL?`<div style="font-size:9px;color:var(--AL);margin-top:1px;font-weight:700">연차 ${alRemain}/${alInfo?.total||15}</div>`:''}
     </td>`;
     let cnt={D:0,E:0,N:0,OFF:0,AL:0,KB:0,SL:0};
     for(let d=1;d<=D;d++){
       const dt=new Date(Y,M-1,d), dstr=ds(Y,M,d), duty=sc[s.id]?.[d]??'';
       let cc='dc'; if(isHol(dstr))cc+=' ch'; else if(isSun(dt))cc+=' ch'; else if(isSat(dt))cc+=' cs';
-      h+=`<td class="${cc}" data-sid="${s.id}" data-day="${d}"><span class="badge ${bc(duty)}">${duty||'·'}</span></td>`;
+      const disp = DUTY_DISP[duty]??duty;
+      h+=`<td class="${cc}" data-sid="${s.id}" data-day="${d}"><span class="badge ${bc(duty)}">${disp}</span></td>`;
       if(cnt[duty]!==undefined) cnt[duty]++;
     }
     const offTot=cnt.OFF+cnt.AL+cnt.KB+cnt.SL;
@@ -779,19 +963,23 @@ function renderReq(){
     <div style="font-size:13px;font-weight:900;color:var(--pink2);margin-bottom:6px">📝 ${Y}년 ${M}월 휴무 요청</div>
     <div style="font-size:12px;color:var(--sub2);line-height:1.7">
       • 지정 휴무: <strong>최대 2일</strong> (퐁당퐁당 불가)<br>
-      • 연차/월차: 무제한<br>
+      • 연차: 남은 개수 자동 계산 (총 연차 수정 가능)<br>
       • 기복·병가: 듀티표에서 직접 입력
     </div>
   </div>`;
 
   state.staff.forEach(s=>{
-    const req=rq[s.id], offN=req.offDays.length, alN=req.alDays.length;
-    h+=`<div class="card">
-      <div class="rsec">
-        <h4>${s.name}${s.isTL?` <span class="tltag">팀장</span>`:''}
-          <span class="rcnt rcnt-off">OFF ${offN}/2</span>
-          <span class="rcnt">연차 ${alN}</span>
-        </h4>`;
+    const req=rq[s.id], offN=req.offDays.length;
+    const alInfo=!s.isTL?getAL(s.id):{total:0,startYM:''};
+    const alUsed=!s.isTL?usedAL(s.id):0;
+    const alRemain=!s.isTL?Math.max(0,alInfo.total-alUsed):0;
+    const nameDisp=s.isTL?`${s.name} 팀장`:s.name;
+
+    h+=`<div class="card"><div class="rsec">
+      <h4>${nameDisp}
+        <span class="rcnt rcnt-off">OFF ${offN}/2</span>
+        ${!s.isTL?`<span class="rcnt" style="background:var(--AL)">연차 ${alRemain}/${alInfo.total}</span>`:''}
+      </h4>`;
 
     if(!s.isTL){
       h+=`<div class="section-lbl">🔘 지정 휴무 (최대 2일 · 퐁당 불가)</div><div class="daygrid">`;
@@ -803,12 +991,36 @@ function renderReq(){
       }
       h+=`</div>`;
     }
-    h+=`<div class="section-lbl" style="margin-top:10px">🟥 연차/월차</div><div class="daygrid">`;
+
+    h+=`<div class="section-lbl" style="margin-top:10px">
+      🟥 연차/월차
+      ${!s.isTL?`<span style="font-size:10px;color:var(--AL);margin-left:6px;font-weight:700">남은 연차 ${alRemain}일 / 총 ${alInfo.total}일</span>`:''}
+    </div><div class="daygrid">`;
     for(let d=1;d<=D;d++){
       const isAl=req.alDays.includes(d), isOff=req.offDays.includes(d);
-      h+=`<button class="dbtn${isAl?' s-al':''}" ${isOff?'disabled':''} onclick="toggleAl(${s.id},${d})">${d}</button>`;
+      const exhausted=!isAl&&alRemain<=0&&!s.isTL;
+      h+=`<button class="dbtn${isAl?' s-al':''}" ${(isOff||exhausted)?'disabled':''} onclick="toggleAl(${s.id},${d})" title="${exhausted?'연차 소진':''}">${d}</button>`;
     }
-    h+=`</div></div></div>`;
+    h+=`</div>`;
+
+    if(!s.isTL){
+      h+=`<div style="margin-top:10px;background:#fdf0f5;border-radius:10px;padding:9px 12px">
+        <div style="font-size:11px;color:var(--sub2);line-height:1.7">
+          📊 연차 현황: <strong style="color:var(--AL)">${alRemain}일 남음</strong>
+          (사용 ${alUsed}일 / 총 ${alInfo.total}일)
+          <span style="font-size:10px"> · ${alInfo.startYM} 기준</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+          <span style="font-size:11px;color:var(--sub2);font-weight:700;white-space:nowrap">총 연차 수정</span>
+          <input type="number" min="0" max="30" value="${alInfo.total}"
+            style="width:60px;background:#fff;border:1.5px solid var(--border2);color:var(--text);
+                   padding:5px 8px;border-radius:8px;font-size:13px;outline:none"
+            onchange="setALTotal(${s.id},this.value)">
+          <span style="font-size:10px;color:var(--sub)">일</span>
+        </div>
+      </div>`;
+    }
+    h+=`</div></div><div class="divider"></div>`;
   });
   return h;
 }
@@ -907,9 +1119,11 @@ function renderStats(){
         <span class="badge bd" style="width:auto;padding:3px 8px">D ${cnt.D}</span>
         <span class="badge be" style="width:auto;padding:3px 8px">E ${cnt.E}</span>
         <span class="badge bn" style="width:auto;padding:3px 8px">N ${cnt.N}</span>
-        <span class="badge bo" style="width:auto;padding:3px 8px">OFF ${offTot}</span>
-        ${cnt.KB?`<span class="badge bk" style="width:auto;padding:3px 8px">KB ${cnt.KB}</span>`:''}
-        ${cnt.SL?`<span class="badge bs" style="width:auto;padding:3px 8px">SL ${cnt.SL}</span>`:''}
+        <span class="badge bo" style="width:auto;padding:3px 8px">/ ${offTot}</span>
+        ${cnt.AL?`<span class="badge ba" style="width:auto;padding:3px 8px">연 ${cnt.AL}</span>`:''}
+        ${cnt.KB?`<span class="badge bk" style="width:auto;padding:3px 8px">기 ${cnt.KB}</span>`:''}
+        ${cnt.SL?`<span class="badge bs" style="width:auto;padding:3px 8px">병 ${cnt.SL}</span>`:''}
+        <span style="font-size:10px;color:var(--AL);font-weight:700">연차잔여 ${remainAL(n.id)}일</span>
       </div>
       <div>
         ${cnt.N===8?'<div class="ok">✅ 나이트 8/8 달성</div>':`<div class="warn">⚠️ 나이트 ${cnt.N}/8</div>`}
@@ -1104,15 +1318,16 @@ function showDutyPicker(sid,day){
 
   opts.forEach(d=>{
     const reason=getForbidReason(sc,sid,day,d);
+    const disp=DUTY_DISP[d]??d;
     h+=`<div class="dopt dopt-${d} ${cur===d?'sel':''} ${reason?'forbidden':''}"
       onclick="${reason?`showToast('${reason}')`:`setDuty(${sid},${day},'${d}')`}">
-      ${d}<br><small style="font-size:8px">${DUTY_LBL[d]}</small>
+      ${disp}<br><small style="font-size:8px">${DUTY_LBL[d]}</small>
     </div>`;
   });
   h+=`<div class="dopt dopt-x ${cur===''?'sel':''}" onclick="setDuty(${sid},${day},'')">·<br><small style="font-size:8px">미정</small></div>
     </div>
-    <div style="background:#f8fafc;border-radius:10px;padding:10px;font-size:11px;color:var(--sub2);margin-bottom:12px;line-height:1.6">
-      💡 <strong>KB</strong>=기복휴가(경조사) · <strong>SL</strong>=병가<br>연차·일반휴무와 별개 카운트
+    <div style="background:#fdf0f5;border-radius:10px;padding:10px;font-size:11px;color:var(--sub2);margin-bottom:12px;line-height:1.6">
+      💡 <strong>기</strong>=기복휴가(경조사) · <strong>병</strong>=병가 · <strong>연</strong>=연차<br>각각 별개 카운트
     </div>
     <button class="bcan" onclick="closeModal()">닫기</button>`;
   showModal(h);
@@ -1159,11 +1374,30 @@ function doGen(emergency){
   showToast(emergency ? '⚡ 긴급 듀티 생성 완료' : '✨ 듀티 생성 완료');
 }
 
+function setALTotal(sid, val){
+  const al=getAL(sid);
+  al.total=parseInt(val)||15;
+  save(); render();
+  showToast('연차 총개수 수정 완료');
+}
+
+function saveMemo(){
+  const memo=getMemo(Y,M);
+  const w=document.getElementById('writerInput');
+  const n=document.getElementById('noteInput');
+  if(w) memo.writer=w.value;
+  if(n) memo.note=n.value;
+  save();
+}
+
 function doPrint(){
   const ver=getVer(Y,M);
+  const memo=getMemo(Y,M);
   document.getElementById('printTitle').textContent=`${Y}년 ${M}월 병동 근무표`;
-  document.getElementById('printMeta').textContent=
-    `Ver.${ver.ver}  |  수정: ${fmtDt(ver.updatedAt)}${ver.emergency?' | ⚡긴급모드':''}`;
+  let meta=`Ver.${ver.ver}  |  수정: ${fmtDt(ver.updatedAt)}${ver.emergency?' | ⚡긴급모드':''}`;
+  if(memo.writer) meta+=`  |  작성자: ${memo.writer}`;
+  if(memo.note) meta+=`\n특이사항: ${memo.note}`;
+  document.getElementById('printMeta').textContent=meta;
   document.getElementById('printHeader').style.display='block';
   window.print();
   setTimeout(()=>{ document.getElementById('printHeader').style.display='none'; },1500);
