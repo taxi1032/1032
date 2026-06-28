@@ -159,6 +159,20 @@ tr.stat td {
   padding:3px 1px; border-top:1px solid var(--border);
 }
 tr.stat td.nc { color:var(--sub2); font-weight:700; font-size:9px }
+
+/* 팀장 특근 셀 — 주말/공휴일 D 특근 */
+td.tl-ot {
+  background: linear-gradient(135deg,rgba(249,115,22,.25),rgba(251,146,60,.18)) !important;
+  position: relative;
+}
+td.tl-ot .badge { box-shadow: 0 0 0 2px var(--KB); }
+td.tl-ot::after {
+  content: '⚡';
+  position: absolute;
+  top: 0px; right: 1px;
+  font-size: 7px;
+  line-height: 1;
+}
 td.rm { min-width:46px }
 td.rm input {
   background:transparent; border:none; color:var(--sub2);
@@ -452,6 +466,8 @@ td.cnt { font-size:10px; font-weight:900; min-width:22px }
   .bs{background:#f3e8ff!important;color:#7c3aed!important}
   tr.stat { display:none!important }
   tr.tl-row td.nc { border-left:3px solid var(--TL)!important }
+  td.tl-ot { background:#fff3e0!important; }
+  td.tl-ot::after { content:'⚡'; position:absolute; top:0; right:1px; font-size:7px; }
   .print-header { display:block!important; text-align:center; margin-bottom:10px }
   .print-header h2 { font-size:15px; font-weight:bold; margin-bottom:4px }
   .print-header .pmeta { font-size:10px; color:#666 }
@@ -512,11 +528,11 @@ const DEFAULT_HOLIDAYS = [
 
 // ══════════════════ 스토어 ══════════════════
 const DEFAULT_STAFF = [
-  {id:1,name:'김창희',joinDate:'2018-03',isTL:true,remark:''},
-  {id:2,name:'김은정',joinDate:'2020-05',isTL:false,remark:''},
-  {id:3,name:'서은희',joinDate:'2021-02',isTL:false,remark:''},
-  {id:4,name:'정경미',joinDate:'2021-09',isTL:false,remark:''},
-  {id:5,name:'송은진',joinDate:'2022-03',isTL:false,remark:''},
+  {id:1,name:'김창희',joinDate:'2024-08',isTL:true,remark:''},
+  {id:2,name:'김은정',joinDate:'2024-11',isTL:false,remark:''},
+  {id:3,name:'서은회',joinDate:'2026-02',isTL:false,remark:''},
+  {id:4,name:'정경미',joinDate:'2026-07',isTL:false,remark:''},
+  {id:5,name:'송은진',joinDate:'2024-10',isTL:false,remark:''},
 ];
 
 function loadState(){
@@ -563,18 +579,37 @@ if(!state.memos) state.memos = {};
 if(!state.satRotIdx) state.satRotIdx = {};
 if(!state.annualLeave) state.annualLeave = {};
 
-// 연차 정보 가져오기 (없으면 기본 15일 / 2026-07 시작)
+// ══════════════════ 연차 시스템 ══════════════════
+
+// 입사일 기준 1년 이상 여부 (오늘 날짜 기준)
+function isOver1Year(joinDate){
+  if(!joinDate) return false;
+  const [jy,jm]=joinDate.split('-').map(Number);
+  const join=new Date(jy,jm-1,1);
+  const now=new Date();
+  const diff=(now-join)/(1000*60*60*24*365.25);
+  return diff>=1;
+}
+
+// 연차 정보 가져오기
+// total: 총 연차 (1년 미만이어도 가불 가능하도록 설정값 유지)
 function getAL(sid){
-  if(!state.annualLeave[sid]) state.annualLeave[sid]={total:15,startYM:'2026-07'};
+  const staff=state.staff.find(s=>s.id==sid);
+  const over1y=staff?isOver1Year(staff.joinDate):false;
+  if(!state.annualLeave[sid]){
+    state.annualLeave[sid]={
+      total: over1y ? 15 : 0,  // 1년 이상이면 15일, 미만이면 0
+      startYM:'2026-07'
+    };
+  }
   return state.annualLeave[sid];
 }
 
-// 시작월부터 현재월까지 사용한 연차 합산
+// 시작월부터 현재 표시월까지 사용한 연차 합산
 function usedAL(sid){
   const al=getAL(sid);
   const [sy,sm]=al.startYM.split('-').map(Number);
   let used=0;
-  // 시작월부터 현재월까지 순회
   let cy=sy,cm=sm;
   while(cy<Y||(cy===Y&&cm<=M)){
     const sc=getSc(cy,cm);
@@ -582,14 +617,32 @@ function usedAL(sid){
     for(let d=1;d<=D;d++){
       if(sc[sid]?.[d]==='AL') used++;
     }
-    // 요청도 합산 (아직 자동생성 안된 경우)
     cm++; if(cm>12){cm=1;cy++;}
   }
   return used;
 }
 
+// 잔여 연차 (마이너스 허용 — 가불)
 function remainAL(sid){
-  return Math.max(0, getAL(sid).total - usedAL(sid));
+  return getAL(sid).total - usedAL(sid);
+}
+
+// 주말/공휴일 여부
+function isWeekendDay(y,m,d){
+  const dt=new Date(y,m-1,d), dstr=ds(y,m,d);
+  return isWH(dt,dstr);
+}
+
+// 이번달 주말 지정휴무 횟수
+function wkndOffCount(sid, y, m){
+  const rq=getRq(y,m);
+  return (rq[sid]?.offDays||[]).filter(d=>isWeekendDay(y,m,d)).length;
+}
+
+// 이번달 주말 연차 횟수
+function wkndAlCount(sid, y, m){
+  const rq=getRq(y,m);
+  return (rq[sid]?.alDays||[]).filter(d=>isWeekendDay(y,m,d)).length;
 }
 
 let Y=new Date().getFullYear(), M=new Date().getMonth()+1;
@@ -718,6 +771,12 @@ function generate(emergency=false){
   function canAssign(sc,n,d,duty){
     if(sc[n.id][d]) return false;
     if(getForbidReason(sc,n.id,d,duty)) return false;
+    // 주말 OFF 1회/월 제한
+    if(duty==='OFF' && isWeekendDay(y,m,d)){
+      const wkndOffCnt=Object.entries(sc[n.id])
+        .filter(([dd,dv])=>dv==='OFF'&&isWeekendDay(y,m,parseInt(dd))).length;
+      if(wkndOffCnt>=1) return false;
+    }
     return true;
   }
 
@@ -867,7 +926,21 @@ function generate(emergency=false){
       if(pick){
         sc[pick.id][d]='D'; cnt[pick.id].D++;
         cnt[pick.id].OFF=Math.max(0,cnt[pick.id].OFF-1);
+      } else if(tl){
+        // 팀원 중 D 배정 불가 → 팀장 특근 투입
+        // 팀장이 OFF 인 날만 (수기 입력 아닌 경우)
+        if(sc[tl.id][d]==='OFF' && !existSc[tl.id]?.[d]){
+          sc[tl.id][d]='D'; // 팀장 특근
+        }
       }
+    }
+  }
+
+  // ── D 공백 최종 점검: 여전히 D 없으면 팀장 무조건 특근 ──
+  for(let d=1;d<=D;d++){
+    const hasD=nurses.some(n=>sc[n.id][d]==='D') || sc[tl?.id]?.[d]==='D';
+    if(!hasD && tl && !existSc[tl.id]?.[d]){
+      sc[tl.id][d]='D';
     }
   }
 
@@ -935,6 +1008,7 @@ function renderDuty(){
     <span class="li"><span class="badge ba">연</span>연차</span>
     <span class="li"><span class="badge bk">기</span>기복</span>
     <span class="li"><span class="badge bs">병</span>병가</span>
+    <span class="li"><span class="badge bd" style="box-shadow:0 0 0 2px var(--KB);background:rgba(249,115,22,.2)">D</span>팀장특근⚡</span>
   </div>
   <div class="btn-row">
     <button class="genbtn" onclick="doGen(false)">✨ 자동 듀티 생성</button>
@@ -952,18 +1026,37 @@ function renderDuty(){
   state.staff.forEach(s=>{
     const alInfo = !s.isTL ? getAL(s.id) : null;
     const alUsed = !s.isTL ? usedAL(s.id) : 0;
-    const alRemain = !s.isTL ? Math.max(0, (alInfo?.total||15) - alUsed) : 0;
+    const alRemain = !s.isTL ? remainAL(s.id) : 0;
     const nameDisp = s.isTL ? `${s.name} 팀장` : s.name;
+    const isNewbie = !s.isTL && !isOver1Year(s.joinDate);
+
+    // 팀장 특근 카운트 (주말/공휴일에 D 배정된 날)
+    let tlOT = 0;
+    if(s.isTL){
+      for(let d=1;d<=D;d++){
+        const dt=new Date(Y,M-1,d), dstr=ds(Y,M,d);
+        if(sc[s.id]?.[d]==='D' && isWH(dt,dstr)) tlOT++;
+      }
+    }
 
     h+=`<tr class="${s.isTL?'tl-row':''}"><td class="nc">
       <div style="font-weight:900">${nameDisp}</div>
       <div class="jd">${s.joinDate}</div>
-      ${!s.isTL?`<div style="font-size:9px;color:var(--AL);margin-top:1px;font-weight:700">연차 ${alRemain}/${alInfo?.total||15}</div>`:''}
+      ${s.isTL && tlOT>0 ? `<div style="font-size:9px;color:var(--KB);margin-top:1px;font-weight:700">특근 ${tlOT}일</div>` : ''}
+      ${!s.isTL ? `<div style="font-size:9px;margin-top:1px;font-weight:700;color:${alRemain<0?'var(--AL)':isNewbie?'var(--KB)':'var(--AL)'}">
+        ${alRemain<0 ? `가불 ${Math.abs(alRemain)}일` : isNewbie ? `연차없음(1년미만)` : `연차 ${alRemain}/${alInfo?.total||0}일`}
+      </div>` : ''}
     </td>`;
     let cnt={D:0,E:0,N:0,OFF:0,AL:0,KB:0,SL:0};
     for(let d=1;d<=D;d++){
       const dt=new Date(Y,M-1,d), dstr=ds(Y,M,d), duty=sc[s.id]?.[d]??'';
-      let cc='dc'; if(isHol(dstr))cc+=' ch'; else if(isSun(dt))cc+=' ch'; else if(isSat(dt))cc+=' cs';
+      // 팀장 특근 여부: 주말/공휴일인데 D 배정
+      const isTLot = s.isTL && duty==='D' && isWH(dt,dstr);
+      let cc='dc';
+      if(isTLot) cc+=' tl-ot';          // 특근 강조
+      else if(isHol(dstr)) cc+=' ch';
+      else if(isSun(dt))   cc+=' ch';
+      else if(isSat(dt))   cc+=' cs';
       const disp = DUTY_DISP[duty]??duty;
       h+=`<td class="${cc}" data-sid="${s.id}" data-day="${d}"><span class="badge ${bc(duty)}">${disp}</span></td>`;
       if(cnt[duty]!==undefined) cnt[duty]++;
@@ -1020,33 +1113,65 @@ function renderReq(){
       </h4>`;
 
     if(!s.isTL){
-      h+=`<div class="section-lbl">🔘 지정 휴무 (최대 2일 · 퐁당 불가)</div><div class="daygrid">`;
+      const wkndOff=wkndOffCount(s.id,Y,M);
+      h+=`<div class="section-lbl">🔘 지정 휴무 (최대 2일 · 퐁당 불가 · 주말 1회/월)<br>
+        <span style="color:var(--KB);font-size:10px">주말 지정휴무 ${wkndOff}/1회 사용</span>
+      </div><div class="daygrid">`;
       for(let d=1;d<=D;d++){
         const isOff=req.offDays.includes(d), isAl=req.alDays.includes(d);
         const wouldP=!isOff&&isPongdang(req.offDays,d);
-        const dis=(!isOff&&offN>=2)||isAl||wouldP;
-        h+=`<button class="dbtn${isOff?' s-off':''}${wouldP?' pond':''}" ${dis?'disabled':''} onclick="toggleOff(${s.id},${d})">${d}</button>`;
+        const isWknd=isWeekendDay(Y,M,d);
+        const wkndFull=!isOff&&isWknd&&wkndOff>=1; // 주말 1회 초과
+        const dis=(!isOff&&offN>=2)||isAl||wouldP||wkndFull;
+        let title='';
+        if(wouldP) title='퐁당퐁당 패턴 불가';
+        else if(wkndFull) title='주말 지정휴무 1회/월 초과';
+        h+=`<button class="dbtn${isOff?' s-off':''}${wouldP||wkndFull?' pond':''}"
+          ${dis?'disabled':''} onclick="toggleOff(${s.id},${d})"
+          title="${title}" style="${isWknd&&!isOff?'border-color:var(--sky)':''}">${d}</button>`;
       }
       h+=`</div>`;
     }
 
+    const over1y=isOver1Year(s.joinDate);
+    const wkndAl=!s.isTL?wkndAlCount(s.id,Y,M):0;
     h+=`<div class="section-lbl" style="margin-top:10px">
       🟥 연차/월차
-      ${!s.isTL?`<span style="font-size:10px;color:var(--AL);margin-left:6px;font-weight:700">남은 연차 ${alRemain}일 / 총 ${alInfo.total}일</span>`:''}
+      ${!s.isTL?`<span style="font-size:10px;color:${alRemain<0?'var(--AL)':'var(--AL)'};margin-left:6px;font-weight:700">
+        ${alRemain<0?`⚠️가불 ${Math.abs(alRemain)}일`:`남은 연차 ${alRemain}일`} / 총 ${alInfo.total}일
+      </span>`:''}
+      ${!s.isTL&&!over1y?`<span style="font-size:10px;color:var(--KB);margin-left:4px">1년미만·가불처리</span>`:''}
+      ${!s.isTL?`<br><span style="font-size:10px;color:var(--sky)">주말 연차 ${wkndAl}/1회</span>`:''}
     </div><div class="daygrid">`;
     for(let d=1;d<=D;d++){
       const isAl=req.alDays.includes(d), isOff=req.offDays.includes(d);
-      const exhausted=!isAl&&alRemain<=0&&!s.isTL;
-      h+=`<button class="dbtn${isAl?' s-al':''}" ${(isOff||exhausted)?'disabled':''} onclick="toggleAl(${s.id},${d})" title="${exhausted?'연차 소진':''}">${d}</button>`;
+      const isWknd=isWeekendDay(Y,M,d);
+      // 주말 연차: 1년 이상만 + 1회/월 한정
+      const wkndAlFull=!isAl&&isWknd&&(!over1y&&wkndAl>=1||over1y&&wkndAl>=1);
+      const dis=isOff||(isWknd&&wkndAlFull);
+      let title='';
+      if(!over1y&&isWknd&&!isAl) title='1년미만: 주말 연차 불가 (가불 처리)';
+      else if(over1y&&isWknd&&wkndAlFull) title='주말 연차 1회/월 초과';
+      h+=`<button class="dbtn${isAl?' s-al':''}"
+        ${dis?'disabled':''}
+        onclick="toggleAl(${s.id},${d})"
+        title="${title}"
+        style="${isWknd?'border-color:var(--sky)':''}">${d}</button>`;
     }
     h+=`</div>`;
 
     if(!s.isTL){
-      h+=`<div style="margin-top:10px;background:#fdf0f5;border-radius:10px;padding:9px 12px">
-        <div style="font-size:11px;color:var(--sub2);line-height:1.7">
-          📊 연차 현황: <strong style="color:var(--AL)">${alRemain}일 남음</strong>
-          (사용 ${alUsed}일 / 총 ${alInfo.total}일)
-          <span style="font-size:10px"> · ${alInfo.startYM} 기준</span>
+      const isMinus=alRemain<0;
+      const isNewbie=!isOver1Year(s.joinDate);
+      h+=`<div style="margin-top:10px;background:${isMinus?'#fff1f2':'#fdf0f5'};border-radius:10px;padding:9px 12px;border:${isMinus?'1.5px solid var(--AL)':'none'}">
+        <div style="font-size:11px;color:var(--sub2);line-height:1.8">
+          📊 연차 현황:
+          <strong style="color:${isMinus?'var(--AL)':'var(--AL)'}">
+            ${isMinus?`⚠️ 가불 ${Math.abs(alRemain)}일 (마이너스)`:`${alRemain}일 남음`}
+          </strong>
+          (사용 ${alUsed}일 / 총 ${alInfo.total}일)<br>
+          ${isNewbie?`<span style="color:var(--KB);font-size:10px">⚡ 1년 미만 — 연차 사용 시 가불 처리, 퇴사 시 급여 정산</span>`:''}
+          ${isMinus?`<span style="color:var(--AL);font-size:10px">💸 가불 ${Math.abs(alRemain)}일 — 퇴사 시 급여 정산 대상</span>`:''}
         </div>
         <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
           <span style="font-size:11px;color:var(--sub2);font-weight:700;white-space:nowrap">총 연차 수정</span>
