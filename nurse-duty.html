@@ -520,12 +520,38 @@ const DEFAULT_STAFF = [
 ];
 
 function loadState(){
-  try{ const s=localStorage.getItem('nurseduty_v5'); if(s) return JSON.parse(s); }catch(e){}
-  return { staff:DEFAULT_STAFF, schedules:{}, requests:{}, remarks:{},
-           holidays:[...DEFAULT_HOLIDAYS], versions:{},
-           memos:{},
-           satRotIdx:{},
-           annualLeave:{}, // staffId -> { total:15, startYM:'2026-07' }
+  // v5 먼저 시도
+  try{
+    const s=localStorage.getItem('nurseduty_v5');
+    if(s) return JSON.parse(s);
+  }catch(e){}
+
+  // v5 없으면 이전 버전 순서대로 마이그레이션
+  const prevKeys=['nurseduty_v4','nurseduty_v3','nurseduty_v2','nurseduty_v1'];
+  for(const key of prevKeys){
+    try{
+      const s=localStorage.getItem(key);
+      if(s){
+        const old=JSON.parse(s);
+        // 새 필드 보완
+        if(!old.memos) old.memos={};
+        if(!old.satRotIdx) old.satRotIdx={};
+        if(!old.annualLeave) old.annualLeave={};
+        if(!old.versions) old.versions={};
+        if(!old.holidays) old.holidays=[...DEFAULT_HOLIDAYS];
+        // v5로 저장 (마이그레이션)
+        localStorage.setItem('nurseduty_v5', JSON.stringify(old));
+        console.log(`데이터 마이그레이션: ${key} → nurseduty_v5`);
+        return old;
+      }
+    }catch(e){}
+  }
+
+  // 아무것도 없으면 초기값
+  return {
+    staff:DEFAULT_STAFF, schedules:{}, requests:{}, remarks:{},
+    holidays:[...DEFAULT_HOLIDAYS], versions:{},
+    memos:{}, satRotIdx:{}, annualLeave:{},
   };
 }
 function save(){ localStorage.setItem('nurseduty_v5', JSON.stringify(state)) }
@@ -1064,12 +1090,25 @@ function renderHoliday(){
 
 // ── 직원 ──
 function renderStaff(){
-  let h=`<div style="display:flex;flex-direction:column;gap:0">`;
+  let h=`
+  <div class="card card-pink" style="margin-bottom:12px">
+    <div style="font-size:13px;font-weight:900;color:var(--pink2);margin-bottom:8px">💾 데이터 백업 / 복원</div>
+    <div style="font-size:11px;color:var(--sub2);margin-bottom:10px;line-height:1.6">
+      앱 업데이트 전 반드시 백업하세요!<br>
+      복원 시 현재 데이터가 백업 파일로 교체됩니다.
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="genbtn" style="font-size:13px;padding:11px" onclick="exportData()">💾 백업 저장</button>
+      <button class="genbtn" style="font-size:13px;padding:11px;background:linear-gradient(135deg,var(--mint),var(--sky))" onclick="importData()">📂 백업 복원</button>
+    </div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:0">`;
   state.staff.forEach(s=>{
+    const nameDisp=s.isTL?`${s.name} 팀장`:s.name;
     h+=`<div class="scard">
       <div class="savt ${s.isTL?'tl':''}">${s.name.slice(-1)}</div>
       <div class="sinf">
-        <div class="sname">${s.name}${s.isTL?' <span style="font-size:10px;color:var(--TL)">👑팀장</span>':''}</div>
+        <div class="sname">${nameDisp}</div>
         <div class="smeta">입사 ${s.joinDate}</div>
       </div>
       <div class="sacts">
@@ -1391,6 +1430,44 @@ function setALTotal(sid, val){
   al.total=parseInt(val)||15;
   save(); render();
   showToast('연차 총개수 수정 완료');
+}
+
+// 데이터 백업 (JSON 다운로드)
+function exportData(){
+  const json=JSON.stringify(state, null, 2);
+  const blob=new Blob([json],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`dutybackup_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('💾 백업 파일 저장 완료');
+}
+
+// 데이터 복원 (JSON 업로드)
+function importData(){
+  const input=document.createElement('input');
+  input.type='file'; input.accept='.json';
+  input.onchange=e=>{
+    const file=e.target.files[0];
+    if(!file) return;
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      try{
+        const data=JSON.parse(ev.target.result);
+        if(!data.staff||!data.schedules) throw new Error('잘못된 파일');
+        if(!confirm('현재 데이터를 백업 파일로 덮어쓰겠습니까?')) return;
+        Object.assign(state, data);
+        save(); render();
+        showToast('✅ 데이터 복원 완료');
+      }catch(err){
+        showToast('❌ 복원 실패: 올바른 백업 파일이 아닙니다');
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
 }
 
 function saveMemo(){
