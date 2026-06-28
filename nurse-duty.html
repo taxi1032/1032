@@ -719,7 +719,7 @@ function getMemo(y,m){
   return state.memos[k];
 }
 
-// ══════════════════ 자동생성 (블록 방식) ══════════════════
+// ══════════════════ 자동생성 (사전 배치표 방식) ══════════════════
 function generate(emergency=false){
   const y=Y, m=M, D=dim(y,m);
   const rq=getRq(y,m);
@@ -729,9 +729,9 @@ function generate(emergency=false){
   state.staff.forEach(s=>{ sc[s.id]={...existSc[s.id]} });
 
   const tl=state.staff.find(s=>s.isTL);
-  const nurses=state.staff.filter(s=>!s.isTL);
+  const nurses=state.staff.filter(s=>!s.isTL); // 4명
 
-  // ── 팀장: 평일 D, 주말/공휴일 OFF (수기 보존) ──
+  // ── 팀장: 평일 D, 주말/공휴일 OFF ──
   if(tl){
     for(let d=1;d<=D;d++){
       if(sc[tl.id][d]) continue;
@@ -741,97 +741,68 @@ function generate(emergency=false){
     rq[tl.id]?.alDays.forEach(d=>{ sc[tl.id][d]='AL' });
   }
 
-  // ── 1순위: 연차/지정휴무 적용 (수기 보존) ──
-  nurses.forEach(n=>{
-    rq[n.id]?.alDays.forEach(d=>{ if(!sc[n.id][d]) sc[n.id][d]='AL' });
-  });
-  nurses.forEach(n=>{
-    rq[n.id]?.offDays.slice(0,2).forEach(d=>{ if(!sc[n.id][d]) sc[n.id][d]='OFF' });
-  });
+  // ── 사전 배치표: 4명 × 31일 ──
+  // 각 간호사에게 D/E/N을 블록 단위로 순환 배정
+  // 블록 구조 (수기표 참고):
+  //   N블록: N-N-N → //-// (3근무 + 2휴무)
+  //   E블록: E-E-E → //-// (3근무 + 2휴무)
+  //   D블록: D-D-D → //-// (3근무 + 2휴무)
+  // 4명이 서로 다른 위상으로 순환
 
-  const TGT_N   = emergency ? 3 : 8;
-  const TGT_OFF = emergency ? 12 : 10;
+  // 한 주기 = N3+OFF2 + E3+OFF2 + D3+OFF2 = 15일
+  // 4명이 각각 0, 5, 10일씩 오프셋
+  const buildPattern = (startShiftIdx, startDayOffset) => {
+    // 15일 주기 패턴 생성
+    const cycle = [];
+    const shifts = ['N','E','D'];
+    for(let s=0;s<shifts.length;s++){
+      for(let w=0;w<3;w++) cycle.push(shifts[s]); // 3일 근무
+      cycle.push('OFF'); cycle.push('OFF');          // 2일 휴무
+    }
+    // startDayOffset만큼 회전
+    const rotated = [...cycle.slice(startDayOffset), ...cycle.slice(0,startDayOffset)];
+    return rotated;
+  };
 
-  // ── 블록 방식 핵심 로직 ──
-  // 각 간호사에게 D/E/N 블록을 순환 배정
-  // 블록 구조: [근무3일 → 휴무2일] 패턴 순환
-  // 순서: D블록 → E블록 → N블록 → 순환
+  // 4명에게 5일씩 오프셋 배정 (균등 분산)
+  const offsets = [0, 5, 10, 3]; // 약간 불규칙하게 분산
 
-  // 간호사별 시작 교대 엇갈리게 배정
-  const shiftCycle = ['D','E','N']; // 순환 교대
-  const blockWork = 3;   // 연속 근무일
-  const blockOff  = 2;   // 연속 휴무일
-  const blockSize = blockWork + blockOff; // 5일 주기
-
-  // 각 간호사 시작 오프셋 (균등 분산)
-  // 4명 → 각각 0, 1, 2, 3 사이클 오프셋
-  nurses.forEach((n, idx)=>{
-    // 이미 수기 입력된 날 건드리지 않음
-    const startOffset = idx * Math.floor(D / nurses.length);
-    let pos = 0; // 현재 날짜 포인터
-    let shiftIdx = idx % shiftCycle.length; // 시작 교대
-    let workLeft = blockWork;
-    let offLeft  = 0;
-
+  nurses.forEach((n, idx) => {
+    const pattern = buildPattern(0, offsets[idx]);
     for(let d=1;d<=D;d++){
-      if(sc[n.id][d]) continue; // 이미 배정된 날 (수기/연차/휴무요청) 스킵
-
-      if(offLeft > 0){
-        sc[n.id][d] = 'OFF';
-        offLeft--;
-      } else if(workLeft > 0){
-        sc[n.id][d] = shiftCycle[shiftIdx];
-        workLeft--;
-        if(workLeft === 0){
-          offLeft  = blockOff;
-          workLeft = blockWork;
-          // 다음 블록은 같은 교대 계속 (N만 2일 후 다음 교대로)
-          if(shiftCycle[shiftIdx]==='N'){
-            shiftIdx=(shiftIdx+1)%shiftCycle.length;
-          }
-        }
-      }
+      if(sc[n.id][d]) continue; // 수기/연차/휴무요청 보존
+      sc[n.id][d] = pattern[(d-1) % pattern.length];
     }
   });
 
-  // ── N 목표 조정 (부족/초과 보정) ──
+  // ── 연차/지정휴무 덮어쓰기 (요청 우선) ──
   nurses.forEach(n=>{
-    let nCnt=Object.values(sc[n.id]).filter(v=>v==='N').length;
-    // N 초과 시 → 뒤쪽부터 OFF로 전환
-    if(nCnt > TGT_N){
-      for(let d=D;d>=1&&nCnt>TGT_N;d--){
-        if(sc[n.id][d]==='N' && !existSc[n.id]?.[d] && !rq[n.id]?.alDays.includes(d)){
-          // 이 날 다른 사람이 N 있으면 OFF 전환 가능
-          const otherN=nurses.some(o=>o.id!==n.id&&sc[o.id][d]==='N');
-          if(otherN){ sc[n.id][d]='OFF'; nCnt--; }
-        }
-      }
-    }
+    rq[n.id]?.alDays.forEach(d=>{ sc[n.id][d]='AL' });
+    rq[n.id]?.offDays.slice(0,2).forEach(d=>{ sc[n.id][d]='OFF' });
   });
 
-  // ── N 후 다음날 강제 OFF (나오데/나오이 방지) ──
+  // ── N 후 다음날 D/E 금지 (나오데/나오이) ──
   nurses.forEach(n=>{
     for(let d=2;d<=D;d++){
-      if(existSc[n.id]?.[d]) continue;
-      const p=sc[n.id][d-1], c=sc[n.id][d];
-      if(p==='N' && (c==='D'||c==='E')){
+      if(existSc[n.id]?.[d] || rq[n.id]?.offDays.includes(d) || rq[n.id]?.alDays.includes(d)) continue;
+      const p=sc[n.id][d-1];
+      if(p==='N' && (sc[n.id][d]==='D' || sc[n.id][d]==='E')){
         sc[n.id][d]='OFF';
       }
     }
   });
 
-  // ── 이데 방지 (E 다음날 D → D를 E로 변경) ──
+  // ── E 다음날 D 금지 (이데) ──
   nurses.forEach(n=>{
     for(let d=2;d<=D;d++){
-      if(existSc[n.id]?.[d]) continue;
+      if(existSc[n.id]?.[d] || rq[n.id]?.offDays.includes(d) || rq[n.id]?.alDays.includes(d)) continue;
       if(sc[n.id][d-1]==='E' && sc[n.id][d]==='D'){
-        sc[n.id][d]='E'; // D→E로 변경 (블록 연장)
+        sc[n.id][d]='E'; // D→E로 유지 (블록 연장)
       }
     }
   });
 
-  // ── 커버리지 보완: 날짜별 D/E/N 공백 채우기 ──
-  // 요청휴무/연차/수기 절대 건드리지 않음
+  // ── 커버리지 점검 및 보완 ──
   const isProtected=(n,d)=>{
     if(existSc[n.id]?.[d]) return true;
     if(rq[n.id]?.offDays.includes(d)) return true;
@@ -845,30 +816,37 @@ function generate(emergency=false){
 
     // N 공백 보완
     if(!nurses.some(n=>sc[n.id][d]==='N') && !emergency){
-      const pick=fillable.find(n=>!getForbidReason(sc,n.id,d,'N'));
-      if(pick){ sc[pick.id][d]='N'; }
+      const pick=fillable.find(n=>sc[n.id][d-1]!=='N'); // 나오나 방지
+      if(pick) sc[pick.id][d]='N';
     }
     // E 공백 보완
     if(!nurses.some(n=>sc[n.id][d]==='E')){
-      const pick=fillable.find(n=>sc[n.id][d]==='OFF'&&!getForbidReason(sc,n.id,d,'E'));
-      if(pick){ sc[pick.id][d]='E'; }
+      const pick=fillable.find(n=>
+        sc[n.id][d]==='OFF' &&
+        sc[n.id][d-1]!=='N'  // 나오이 방지
+      );
+      if(pick) sc[pick.id][d]='E';
     }
     // D 공백 보완
     if(!nurses.some(n=>sc[n.id][d]==='D')){
-      const pick=fillable.find(n=>sc[n.id][d]==='OFF'&&!getForbidReason(sc,n.id,d,'D'));
+      const pick=fillable.find(n=>
+        sc[n.id][d]==='OFF' &&
+        sc[n.id][d-1]!=='N' &&  // 나오데 방지
+        sc[n.id][d-1]!=='E'     // 이데 방지
+      );
       if(pick){
         sc[pick.id][d]='D';
       } else if(tl && sc[tl.id][d]==='OFF' && !existSc[tl.id]?.[d]){
-        // 팀원 불가 → 팀장 특근
+        // 팀원 불가 → 팀장 특근 (최소화)
         sc[tl.id][d]='D';
       }
     }
   }
 
-  // ── D 최종 점검: 여전히 D 없으면 팀장 무조건 특근 ──
+  // ── 최종 D 공백 점검: 팀장 특근 무조건 투입 ──
   for(let d=1;d<=D;d++){
-    const hasD=nurses.some(n=>sc[n.id][d]==='D') || sc[tl?.id]?.[d]==='D';
-    if(!hasD && tl && !existSc[tl.id]?.[d]){
+    const hasAnyD = nurses.some(n=>sc[n.id][d]==='D') || sc[tl?.id]?.[d]==='D';
+    if(!hasAnyD && tl && !existSc[tl.id]?.[d]){
       sc[tl.id][d]='D';
     }
   }
