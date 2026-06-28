@@ -515,7 +515,7 @@ td.cnt { font-size:10px; font-weight:900; min-width:22px }
 // ══════════════════ 상수 ══════════════════
 const DOW = ['일','월','화','수','목','금','토'];
 const DUTY_LBL = {D:'데이',E:'이브닝',N:'나이트',OFF:'휴무',AL:'연차',KB:'기복휴가',SL:'병가','':'미정'};
-const DUTY_DISP = {D:'D',E:'E',N:'N',OFF:'/',AL:'연',KB:'기',SL:'병','':'·'};
+const DUTY_DISP = {D:'D',E:'E',N:'N',OFF:'/',AL:'연',KB:'기',SL:'병',ROFF:'//',''  :'·'};
 
 const DEFAULT_HOLIDAYS = [
   '2026-01-01','2026-01-28','2026-01-29','2026-01-30',
@@ -719,224 +719,153 @@ function getMemo(y,m){
   return state.memos[k];
 }
 
-// ══════════════════ 자동생성 ══════════════════
+// ══════════════════ 자동생성 (블록 방식) ══════════════════
 function generate(emergency=false){
   const y=Y, m=M, D=dim(y,m);
   const rq=getRq(y,m);
-  const existSc=getSc(y,m); // 기존 수기 입력 보존용
+  const existSc=getSc(y,m);
 
-  // 기존 스케줄 복사 (수기 입력 유지)
   const sc={};
   state.staff.forEach(s=>{ sc[s.id]={...existSc[s.id]} });
 
   const tl=state.staff.find(s=>s.isTL);
   const nurses=state.staff.filter(s=>!s.isTL);
 
-  // 팀장: 수기 입력 없는 날만 자동 배정
+  // ── 팀장: 평일 D, 주말/공휴일 OFF (수기 보존) ──
   if(tl){
     for(let d=1;d<=D;d++){
-      if(sc[tl.id][d]) continue; // 수기 입력된 날 건드리지 않음
+      if(sc[tl.id][d]) continue;
       const dt=new Date(y,m-1,d), dstr=ds(y,m,d);
       sc[tl.id][d] = isWH(dt,dstr) ? 'OFF' : 'D';
     }
     rq[tl.id]?.alDays.forEach(d=>{ sc[tl.id][d]='AL' });
   }
 
-  const cnt={};
+  // ── 1순위: 연차/지정휴무 적용 (수기 보존) ──
   nurses.forEach(n=>{
-    cnt[n.id]={D:0,E:0,N:0,OFF:0,AL:0};
-    // 기존 수기 입력 카운트 반영
-    for(let d=1;d<=D;d++){
-      const v=sc[n.id][d];
-      if(v && cnt[n.id][v]!==undefined) cnt[n.id][v]++;
-    }
+    rq[n.id]?.alDays.forEach(d=>{ if(!sc[n.id][d]) sc[n.id][d]='AL' });
   });
-
-  // 연차 우선 (수기 없는 날만)
   nurses.forEach(n=>{
-    rq[n.id]?.alDays.forEach(d=>{
-      if(!sc[n.id][d]){ sc[n.id][d]='AL'; cnt[n.id].AL++ }
-    });
-  });
-  // 지정 휴무 (수기 없는 날만)
-  nurses.forEach(n=>{
-    rq[n.id]?.offDays.slice(0,2).forEach(d=>{
-      if(!sc[n.id][d]){ sc[n.id][d]='OFF'; cnt[n.id].OFF++ }
-    });
+    rq[n.id]?.offDays.slice(0,2).forEach(d=>{ if(!sc[n.id][d]) sc[n.id][d]='OFF' });
   });
 
   const TGT_N   = emergency ? 3 : 8;
   const TGT_OFF = emergency ? 12 : 10;
 
-  function canAssign(sc,n,d,duty){
-    if(sc[n.id][d]) return false;
-    if(getForbidReason(sc,n.id,d,duty)) return false;
-    // 주말 OFF 1회/월 제한
-    if(duty==='OFF' && isWeekendDay(y,m,d)){
-      const wkndOffCnt=Object.entries(sc[n.id])
-        .filter(([dd,dv])=>dv==='OFF'&&isWeekendDay(y,m,parseInt(dd))).length;
-      if(wkndOffCnt>=1) return false;
-    }
-    return true;
-  }
+  // ── 블록 방식 핵심 로직 ──
+  // 각 간호사에게 D/E/N 블록을 순환 배정
+  // 블록 구조: [근무3일 → 휴무2일] 패턴 순환
+  // 순서: D블록 → E블록 → N블록 → 순환
 
-  // 금지패턴 무시하고 강제 배정 (커버리지 우선)
-  function canAssignForce(sc,n,d,duty){
-    if(sc[n.id][d]) return false;
-    // KB, SL, AL 은 강제 배정 불가
-    if(['KB','SL','AL'].includes(sc[n.id][d])) return false;
-    return true;
-  }
+  // 간호사별 시작 교대 엇갈리게 배정
+  const shiftCycle = ['D','E','N']; // 순환 교대
+  const blockWork = 3;   // 연속 근무일
+  const blockOff  = 2;   // 연속 휴무일
+  const blockSize = blockWork + blockOff; // 5일 주기
 
-  function pickOne(duty, avail, d, force=false){
-    const cands = avail.filter(n=> force ? canAssignForce(sc,n,d,duty) : canAssign(sc,n,d,duty));
-    if(!cands.length) return null;
-    cands.sort((a,b)=>{
-      let sa=cnt[a.id][duty]??0, sb=cnt[b.id][duty]??0;
-      if(duty==='OFF'){
-        if(d>1 && sc[a.id][d-1]==='N') sa-=50;
-        if(d>1 && sc[b.id][d-1]==='N') sb-=50;
-      }
-      if(duty==='D' && isSat(new Date(y,m-1,d))){
-        sa += satDCnt(sc,a.id,y,m)*10;
-        sb += satDCnt(sc,b.id,y,m)*10;
-      }
-      return sa-sb;
-    });
-    return cands[0];
-  }
+  // 각 간호사 시작 오프셋 (균등 분산)
+  // 4명 → 각각 0, 1, 2, 3 사이클 오프셋
+  nurses.forEach((n, idx)=>{
+    // 이미 수기 입력된 날 건드리지 않음
+    const startOffset = idx * Math.floor(D / nurses.length);
+    let pos = 0; // 현재 날짜 포인터
+    let shiftIdx = idx % shiftCycle.length; // 시작 교대
+    let workLeft = blockWork;
+    let offLeft  = 0;
 
-  // 고참 순서 (팀장 제외, 입사 순)
-  const seniorOrder = [...nurses].sort((a,b)=> a.joinDate.localeCompare(b.joinDate));
-  // 토요일 순환 인덱스
-  const satKey = mk(y,m);
-  if(!state.satRotIdx[satKey]) state.satRotIdx[satKey]=0;
-  let satRotCur = state.satRotIdx[satKey];
+    for(let d=1;d<=D;d++){
+      if(sc[n.id][d]) continue; // 이미 배정된 날 (수기/연차/휴무요청) 스킵
 
-  for(let d=1;d<=D;d++){
-    const avail=nurses.filter(n=>!sc[n.id][d]);
-    const dt=new Date(y,m-1,d);
-    const dstr=ds(y,m,d);
-
-    // 팀장 부재 여부 (OFF/AL/KB/SL)
-    const tlAbsent = tl && ['OFF','AL','KB','SL'].includes(sc[tl.id]?.[d]);
-
-    // N 배정
-    const np=pickOne('N',avail,d);
-    if(np && cnt[np.id].N<TGT_N){ sc[np.id][d]='N'; cnt[np.id].N++; avail.splice(avail.indexOf(np),1) }
-    // E 배정
-    const ep=pickOne('E',avail,d);
-    if(ep){ sc[ep.id][d]='E'; cnt[ep.id].E++; avail.splice(avail.indexOf(ep),1) }
-
-    // D 배정
-    if(tlAbsent && isSat(dt)){
-      // 토요일 + 팀장 부재 → 전 근무자 순환
-      const satCands = avail.filter(n=>canAssign(sc,n,d,'D'));
-      if(satCands.length){
-        // 순환 인덱스로 선택
-        const pick = seniorOrder.filter(n=>satCands.includes(n));
-        const chosen = pick[satRotCur % Math.max(pick.length,1)] ?? satCands[0];
-        sc[chosen.id][d]='D'; cnt[chosen.id].D++;
-        avail.splice(avail.indexOf(chosen),1);
-        satRotCur++;
-      }
-    } else if(tlAbsent && !isSat(dt)){
-      // 평일 + 팀장 부재 → 고참(김은정) 우선 D 배정
-      const senior = seniorOrder.find(n=>canAssign(sc,n,d,'D') && avail.includes(n));
-      if(senior){
-        sc[senior.id][d]='D'; cnt[senior.id].D++;
-        avail.splice(avail.indexOf(senior),1);
-      } else {
-        const dp=pickOne('D',avail,d);
-        if(dp){ sc[dp.id][d]='D'; cnt[dp.id].D++; avail.splice(avail.indexOf(dp),1) }
-      }
-    } else {
-      // 정상: 팀원 1명 D 배정
-      const dp=pickOne('D',avail,d);
-      if(dp){ sc[dp.id][d]='D'; cnt[dp.id].D++; avail.splice(avail.indexOf(dp),1) }
-    }
-
-    // 나머지 OFF
-    avail.forEach(n=>{ if(!sc[n.id][d]){ sc[n.id][d]='OFF'; cnt[n.id].OFF++ } });
-  }
-  // 토요일 순환 인덱스 저장
-  state.satRotIdx[satKey] = satRotCur;
-
-  // N 후 다음날 D/E 강제 OFF (수기 입력 아닌 경우만)
-  nurses.forEach(n=>{
-    for(let d=2;d<=D;d++){
-      const p=sc[n.id][d-1], c=sc[n.id][d];
-      if(p==='N' && (c==='D'||c==='E')){
-        // 수기 입력된 날이면 건드리지 않음
-        if(existSc[n.id]?.[d]) continue;
-        sc[n.id][d]='OFF'; cnt[n.id].OFF++;
-        if(c==='D') cnt[n.id].D=Math.max(0,cnt[n.id].D-1);
-        if(c==='E') cnt[n.id].E=Math.max(0,cnt[n.id].E-1);
+      if(offLeft > 0){
+        sc[n.id][d] = 'OFF';
+        offLeft--;
+      } else if(workLeft > 0){
+        sc[n.id][d] = shiftCycle[shiftIdx];
+        workLeft--;
+        if(workLeft === 0){
+          offLeft  = blockOff;
+          workLeft = blockWork;
+          // 다음 블록은 같은 교대 계속 (N만 2일 후 다음 교대로)
+          if(shiftCycle[shiftIdx]==='N'){
+            shiftIdx=(shiftIdx+1)%shiftCycle.length;
+          }
+        }
       }
     }
   });
 
-  // ── 커버리지 보완: D/E/N 공백 날짜 강제 채우기 ──
-  // ※ 요청휴무(OFF)/연차(AL)/기복(KB)/병가(SL) 는 절대 변경 안 함
-  const reqProtected=(n,d)=>{
-    // 요청으로 걸린 날짜는 보호
-    const rq=getRq(y,m);
-    if(rq[n.id]?.offDays.includes(d)) return true;  // 지정휴무 요청일
-    if(rq[n.id]?.alDays.includes(d)) return true;   // 연차 요청일
-    // KB, SL, AL 은 무조건 보호
-    if(['KB','SL','AL'].includes(sc[n.id][d])) return true;
-    // 수기 입력된 날 보호
+  // ── N 목표 조정 (부족/초과 보정) ──
+  nurses.forEach(n=>{
+    let nCnt=Object.values(sc[n.id]).filter(v=>v==='N').length;
+    // N 초과 시 → 뒤쪽부터 OFF로 전환
+    if(nCnt > TGT_N){
+      for(let d=D;d>=1&&nCnt>TGT_N;d--){
+        if(sc[n.id][d]==='N' && !existSc[n.id]?.[d] && !rq[n.id]?.alDays.includes(d)){
+          // 이 날 다른 사람이 N 있으면 OFF 전환 가능
+          const otherN=nurses.some(o=>o.id!==n.id&&sc[o.id][d]==='N');
+          if(otherN){ sc[n.id][d]='OFF'; nCnt--; }
+        }
+      }
+    }
+  });
+
+  // ── N 후 다음날 강제 OFF (나오데/나오이 방지) ──
+  nurses.forEach(n=>{
+    for(let d=2;d<=D;d++){
+      if(existSc[n.id]?.[d]) continue;
+      const p=sc[n.id][d-1], c=sc[n.id][d];
+      if(p==='N' && (c==='D'||c==='E')){
+        sc[n.id][d]='OFF';
+      }
+    }
+  });
+
+  // ── 이데 방지 (E 다음날 D → D를 E로 변경) ──
+  nurses.forEach(n=>{
+    for(let d=2;d<=D;d++){
+      if(existSc[n.id]?.[d]) continue;
+      if(sc[n.id][d-1]==='E' && sc[n.id][d]==='D'){
+        sc[n.id][d]='E'; // D→E로 변경 (블록 연장)
+      }
+    }
+  });
+
+  // ── 커버리지 보완: 날짜별 D/E/N 공백 채우기 ──
+  // 요청휴무/연차/수기 절대 건드리지 않음
+  const isProtected=(n,d)=>{
     if(existSc[n.id]?.[d]) return true;
+    if(rq[n.id]?.offDays.includes(d)) return true;
+    if(rq[n.id]?.alDays.includes(d)) return true;
+    if(['KB','SL','AL'].includes(sc[n.id][d])) return true;
     return false;
   };
 
   for(let d=1;d<=D;d++){
-    // 보완 가능 후보: 요청보호 아니고 현재 OFF인 사람만
-    const fillCands=nurses.filter(n=>
-      sc[n.id][d]==='OFF' && !reqProtected(n,d)
-    );
+    const fillable=nurses.filter(n=>sc[n.id][d]==='OFF'&&!isProtected(n,d));
 
     // N 공백 보완
-    const hasN=nurses.some(n=>sc[n.id][d]==='N');
-    if(!hasN && !emergency){
-      const safe=fillCands.filter(n=>!getForbidReason(sc,n.id,d,'N'));
-      const pick=safe.length?safe[0]:null;
-      if(pick){
-        sc[pick.id][d]='N'; cnt[pick.id].N++;
-        cnt[pick.id].OFF=Math.max(0,cnt[pick.id].OFF-1);
-      }
+    if(!nurses.some(n=>sc[n.id][d]==='N') && !emergency){
+      const pick=fillable.find(n=>!getForbidReason(sc,n.id,d,'N'));
+      if(pick){ sc[pick.id][d]='N'; }
     }
-
     // E 공백 보완
-    const hasE=nurses.some(n=>sc[n.id][d]==='E');
-    if(!hasE){
-      const safe=fillCands.filter(n=>sc[n.id][d]==='OFF'&&!getForbidReason(sc,n.id,d,'E'));
-      const pick=safe.length?safe[0]:null;
-      if(pick){
-        sc[pick.id][d]='E'; cnt[pick.id].E++;
-        cnt[pick.id].OFF=Math.max(0,cnt[pick.id].OFF-1);
-      }
+    if(!nurses.some(n=>sc[n.id][d]==='E')){
+      const pick=fillable.find(n=>sc[n.id][d]==='OFF'&&!getForbidReason(sc,n.id,d,'E'));
+      if(pick){ sc[pick.id][d]='E'; }
     }
-
-    // D 공백 보완 (팀원)
-    const hasD=nurses.some(n=>sc[n.id][d]==='D');
-    if(!hasD){
-      const safe=fillCands.filter(n=>sc[n.id][d]==='OFF'&&!getForbidReason(sc,n.id,d,'D'));
-      const pick=safe.length?safe[0]:null;
+    // D 공백 보완
+    if(!nurses.some(n=>sc[n.id][d]==='D')){
+      const pick=fillable.find(n=>sc[n.id][d]==='OFF'&&!getForbidReason(sc,n.id,d,'D'));
       if(pick){
-        sc[pick.id][d]='D'; cnt[pick.id].D++;
-        cnt[pick.id].OFF=Math.max(0,cnt[pick.id].OFF-1);
-      } else if(tl){
-        // 팀원 중 D 배정 불가 → 팀장 특근 투입
-        // 팀장이 OFF 인 날만 (수기 입력 아닌 경우)
-        if(sc[tl.id][d]==='OFF' && !existSc[tl.id]?.[d]){
-          sc[tl.id][d]='D'; // 팀장 특근
-        }
+        sc[pick.id][d]='D';
+      } else if(tl && sc[tl.id][d]==='OFF' && !existSc[tl.id]?.[d]){
+        // 팀원 불가 → 팀장 특근
+        sc[tl.id][d]='D';
       }
     }
   }
 
-  // ── D 공백 최종 점검: 여전히 D 없으면 팀장 무조건 특근 ──
+  // ── D 최종 점검: 여전히 D 없으면 팀장 무조건 특근 ──
   for(let d=1;d<=D;d++){
     const hasD=nurses.some(n=>sc[n.id][d]==='D') || sc[tl?.id]?.[d]==='D';
     if(!hasD && tl && !existSc[tl.id]?.[d]){
@@ -1004,7 +933,8 @@ function renderDuty(){
     <span class="li"><span class="badge bd">D</span>데이</span>
     <span class="li"><span class="badge be">E</span>이브닝</span>
     <span class="li"><span class="badge bn">N</span>나이트</span>
-    <span class="li"><span class="badge bo">/</span>휴무</span>
+    <span class="li"><span class="badge bo">/</span>자동휴무</span>
+    <span class="li"><span class="badge bo" style="font-size:9px;letter-spacing:-1px;font-weight:900">//</span>신청휴무</span>
     <span class="li"><span class="badge ba">연</span>연차</span>
     <span class="li"><span class="badge bk">기</span>기복</span>
     <span class="li"><span class="badge bs">병</span>병가</span>
@@ -1050,15 +980,18 @@ function renderDuty(){
     let cnt={D:0,E:0,N:0,OFF:0,AL:0,KB:0,SL:0};
     for(let d=1;d<=D;d++){
       const dt=new Date(Y,M-1,d), dstr=ds(Y,M,d), duty=sc[s.id]?.[d]??'';
-      // 팀장 특근 여부: 주말/공휴일인데 D 배정
       const isTLot = s.isTL && duty==='D' && isWH(dt,dstr);
+      // 요청 휴무 여부 (// 표시)
+      const rqData=getRq(Y,M);
+      const isReqOff = !s.isTL && duty==='OFF' && rqData[s.id]?.offDays.includes(d);
       let cc='dc';
-      if(isTLot) cc+=' tl-ot';          // 특근 강조
+      if(isTLot) cc+=' tl-ot';
       else if(isHol(dstr)) cc+=' ch';
       else if(isSun(dt))   cc+=' ch';
       else if(isSat(dt))   cc+=' cs';
-      const disp = DUTY_DISP[duty]??duty;
-      h+=`<td class="${cc}" data-sid="${s.id}" data-day="${d}"><span class="badge ${bc(duty)}">${disp}</span></td>`;
+      const disp = isReqOff ? '//' : (DUTY_DISP[duty]??duty);
+      const extraStyle = isReqOff ? 'font-size:9px;letter-spacing:-1px;font-weight:900' : '';
+      h+=`<td class="${cc}" data-sid="${s.id}" data-day="${d}"><span class="badge ${bc(duty)}" style="${extraStyle}">${disp}</span></td>`;
       if(cnt[duty]!==undefined) cnt[duty]++;
     }
     const offTot=cnt.OFF+cnt.AL+cnt.KB+cnt.SL;
