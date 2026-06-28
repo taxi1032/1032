@@ -792,43 +792,55 @@ function generate(emergency=false){
   });
 
   // ── 커버리지 보완: D/E/N 공백 날짜 강제 채우기 ──
+  // ※ 요청휴무(OFF)/연차(AL)/기복(KB)/병가(SL) 는 절대 변경 안 함
+  const reqProtected=(n,d)=>{
+    // 요청으로 걸린 날짜는 보호
+    const rq=getRq(y,m);
+    if(rq[n.id]?.offDays.includes(d)) return true;  // 지정휴무 요청일
+    if(rq[n.id]?.alDays.includes(d)) return true;   // 연차 요청일
+    // KB, SL, AL 은 무조건 보호
+    if(['KB','SL','AL'].includes(sc[n.id][d])) return true;
+    // 수기 입력된 날 보호
+    if(existSc[n.id]?.[d]) return true;
+    return false;
+  };
+
   for(let d=1;d<=D;d++){
-    const availAll=nurses.filter(n=>!['KB','SL','AL'].includes(sc[n.id][d]));
+    // 보완 가능 후보: 요청보호 아니고 현재 OFF인 사람만
+    const fillCands=nurses.filter(n=>
+      sc[n.id][d]==='OFF' && !reqProtected(n,d)
+    );
 
     // N 공백 보완
     const hasN=nurses.some(n=>sc[n.id][d]==='N');
     if(!hasN && !emergency){
-      const fp=availAll.filter(n=>!sc[n.id][d]||sc[n.id][d]==='OFF');
-      // OFF 중 나오데/나오이 아닌 사람 우선
-      const safe=fp.filter(n=>!getForbidReason(sc,n.id,d,'N'));
-      const pick=safe.length?safe[0]:fp[0];
+      const safe=fillCands.filter(n=>!getForbidReason(sc,n.id,d,'N'));
+      const pick=safe.length?safe[0]:null;
       if(pick){
-        if(sc[pick.id][d]==='OFF') cnt[pick.id].OFF=Math.max(0,cnt[pick.id].OFF-1);
         sc[pick.id][d]='N'; cnt[pick.id].N++;
+        cnt[pick.id].OFF=Math.max(0,cnt[pick.id].OFF-1);
       }
     }
 
     // E 공백 보완
     const hasE=nurses.some(n=>sc[n.id][d]==='E');
     if(!hasE){
-      const fp=availAll.filter(n=>!sc[n.id][d]||sc[n.id][d]==='OFF');
-      const safe=fp.filter(n=>!getForbidReason(sc,n.id,d,'E'));
-      const pick=safe.length?safe[0]:fp[0];
+      const safe=fillCands.filter(n=>sc[n.id][d]==='OFF'&&!getForbidReason(sc,n.id,d,'E'));
+      const pick=safe.length?safe[0]:null;
       if(pick){
-        if(sc[pick.id][d]==='OFF') cnt[pick.id].OFF=Math.max(0,cnt[pick.id].OFF-1);
         sc[pick.id][d]='E'; cnt[pick.id].E++;
+        cnt[pick.id].OFF=Math.max(0,cnt[pick.id].OFF-1);
       }
     }
 
     // D 공백 보완 (팀원)
     const hasD=nurses.some(n=>sc[n.id][d]==='D');
     if(!hasD){
-      const fp=availAll.filter(n=>!sc[n.id][d]||sc[n.id][d]==='OFF');
-      const safe=fp.filter(n=>!getForbidReason(sc,n.id,d,'D'));
-      const pick=safe.length?safe[0]:fp[0];
+      const safe=fillCands.filter(n=>sc[n.id][d]==='OFF'&&!getForbidReason(sc,n.id,d,'D'));
+      const pick=safe.length?safe[0]:null;
       if(pick){
-        if(sc[pick.id][d]==='OFF') cnt[pick.id].OFF=Math.max(0,cnt[pick.id].OFF-1);
         sc[pick.id][d]='D'; cnt[pick.id].D++;
+        cnt[pick.id].OFF=Math.max(0,cnt[pick.id].OFF-1);
       }
     }
   }
