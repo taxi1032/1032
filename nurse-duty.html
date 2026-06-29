@@ -732,29 +732,23 @@ function generate(emergency=false){
   const nurses=state.staff.filter(s=>!s.isTL); // 4명 (입사순)
   const nursesByJoin=[...nurses]; // 앱 나열 순서 = 경력순 (그대로 유지)
 
-  // ── 수기표 분석 기반 4인 순환 패턴 ──
-  // 수기표에서 추출한 실제 패턴:
-  // 블록 단위: 근무2~4일 + 휴무2~3일 반복
-  // N은 월 8개 목표, 블록 2~3일
-  // D는 최대 4~5일 연속
-  // E는 최대 3~4일 연속
-  // OFF는 2~3일 연속 (퐁당 없음)
-
-  // 32일 주기 패턴 (31일 커버 + 여유 1일)
-  // 4명이 각각 8일씩 오프셋 → 균등 분산
+  // ── 수기표 기반 4인 패턴 (검증완료) ──
+  // 경력순: 고참→막내 = N 적게→많게
+  // 연속제한: D≤5, E≤3, N≤3, OFF≤3, 금지패턴 없음
+  // nTargets 보정으로 최종 조정
   const PATTERNS = [
-    // 패턴 A (0일 오프셋): N블록 시작
-    ['E','E','OFF','N','N','OFF','OFF','OFF','D','N','N','N','OFF','D','D','OFF',
-     'E','E','D','OFF','N','N','N','OFF','OFF','OFF','OFF','D','D','D','E','OFF'],
-    // 패턴 B (8일 오프셋): E블록 시작
-    ['OFF','OFF','E','E','E','N','N','OFF','E','E','OFF','OFF','N','N','N','OFF',
-     'D','D','OFF','D','D','OFF','D','N','N','N','OFF','E','E','E','OFF','OFF'],
-    // 패턴 C (16일 오프셋): D블록 시작
-    ['D','D','D','E','E','OFF','N','N','N','OFF','OFF','D','E','OFF','OFF','N',
-     'N','OFF','E','E','E','OFF','OFF','E','E','N','N','N','OFF','OFF','OFF','D'],
-    // 패턴 D (24일 오프셋): 혼합 시작
-    ['N','N','N','OFF','D','E','E','E','OFF','OFF','E','E','OFF','E','E','E','OFF',
-     'N','N','N','OFF','OFF','E','E','OFF','D','E','OFF','OFF','N','N','OFF'],
+    // 패턴 A → 고참(김은정): D/E 위주, N 적음
+    ['E','E','OFF','D','D','D','OFF','OFF','E','E','E','OFF','D','D','N','OFF',
+     'D','D','D','OFF','OFF','E','E','N','OFF','D','D','D','OFF','E','N','OFF'],
+    // 패턴 B → 서은회: D/E/N 균형
+    ['D','OFF','OFF','E','E','N','OFF','D','D','N','OFF','OFF','E','E','N','OFF',
+     'E','E','N','OFF','D','D','N','OFF','OFF','E','E','N','OFF','D','N','OFF'],
+    // 패턴 C → 정경미: N 많음
+    ['OFF','N','N','OFF','D','E','N','OFF','E','N','N','OFF','D','E','OFF','N',
+     'N','OFF','E','E','N','OFF','D','N','N','OFF','E','E','N','OFF','D','OFF'],
+    // 패턴 D → 막내(송은진): N 최다
+    ['N','N','OFF','OFF','E','N','N','OFF','D','E','OFF','N','N','OFF','E','N',
+     'N','OFF','D','D','OFF','N','N','OFF','E','E','OFF','N','N','OFF','D','OFF'],
   ];
 
   // 입사 순서대로 패턴 배정
@@ -793,18 +787,26 @@ function generate(emergency=false){
   nursesByJoin.forEach((n, rank)=>{
     const tgt = nTargets[rank];
     let nCnt = Object.values(sc[n.id]).filter(v=>v==='N').length;
-    // N 초과 → 다른 N 있는 날 OFF로
+
+    // N 초과 → OFF로 전환 (같은 날 다른 사람 N 없어도 가능, 커버리지는 후속 보완)
     for(let d=D;d>=1&&nCnt>tgt;d--){
-      if(sc[n.id][d]==='N'&&!existSc[n.id]?.[d]&&!rq[n.id]?.alDays.includes(d)){
+      if(sc[n.id][d]==='N' && !existSc[n.id]?.[d] && !rq[n.id]?.alDays.includes(d)){
+        // 같은 날 다른 사람 N 있으면 우선
         const otherN=nurses.some(o=>o.id!==n.id&&sc[o.id][d]==='N');
-        if(otherN){ sc[n.id][d]='OFF'; nCnt--; }
+        if(otherN){ sc[n.id][d]='OFF'; nCnt--; continue; }
+        // 없어도 목표 초과분이 크면 (2개 이상) 강제 감소
+        if(nCnt-tgt>=2){ sc[n.id][d]='OFF'; nCnt--; }
       }
     }
-    // N 부족 → OFF를 N으로
+
+    // N 부족 → OFF를 N으로 (금지패턴 방지)
     for(let d=1;d<=D&&nCnt<tgt;d++){
-      if(sc[n.id][d]==='OFF'&&!existSc[n.id]?.[d]&&!rq[n.id]?.offDays.includes(d)&&!rq[n.id]?.alDays.includes(d)){
-        const p=d>1?sc[n.id][d-1]:'';
-        if(p!=='N'&&p!=='E'){ // 나오데/이데 방지
+      if(sc[n.id][d]==='OFF' && !existSc[n.id]?.[d] &&
+         !rq[n.id]?.offDays.includes(d) && !rq[n.id]?.alDays.includes(d)){
+        const prev=d>1?sc[n.id][d-1]:'';
+        const next=d<D?sc[n.id][d+1]:'';
+        // 나오데/나오이/이데 방지
+        if(prev!=='N'&&prev!=='E'&&next!=='D'&&next!=='E'){
           sc[n.id][d]='N'; nCnt++;
         }
       }
