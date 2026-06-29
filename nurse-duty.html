@@ -732,23 +732,23 @@ function generate(emergency=false){
   const nurses=state.staff.filter(s=>!s.isTL); // 4명 (입사순)
   const nursesByJoin=[...nurses]; // 앱 나열 순서 = 경력순 (그대로 유지)
 
-  // ── 수기표 기반 4인 패턴 (검증완료) ──
-  // 경력순: 고참→막내 = N 적게→많게
-  // 연속제한: D≤5, E≤3, N≤3, OFF≤3, 금지패턴 없음
-  // nTargets 보정으로 최종 조정
+  // ── 검증 완료된 4인 패턴 ──
+  // 경력순: 고참→막내 = N 적게→많게 (회사 비용 최적화)
+  // 검증: 금지패턴 없음, N목표 충족, 연속제한 준수
+  // 공백은 커버리지 보완 + 팀장 특근으로 처리
   const PATTERNS = [
-    // 패턴 A → 고참(김은정): D/E 위주, N 적음
-    ['E','E','OFF','D','D','D','OFF','OFF','E','E','E','OFF','D','D','N','OFF',
-     'D','D','D','OFF','OFF','E','E','N','OFF','D','D','D','OFF','E','N','OFF'],
-    // 패턴 B → 서은회: D/E/N 균형
-    ['D','OFF','OFF','E','E','N','OFF','D','D','N','OFF','OFF','E','E','N','OFF',
-     'E','E','N','OFF','D','D','N','OFF','OFF','E','E','N','OFF','D','N','OFF'],
-    // 패턴 C → 정경미: N 많음
-    ['OFF','N','N','OFF','D','E','N','OFF','E','N','N','OFF','D','E','OFF','N',
-     'N','OFF','E','E','N','OFF','D','N','N','OFF','E','E','N','OFF','D','OFF'],
-    // 패턴 D → 막내(송은진): N 최다
-    ['N','N','OFF','OFF','E','N','N','OFF','D','E','OFF','N','N','OFF','E','N',
-     'N','OFF','D','D','OFF','N','N','OFF','E','E','OFF','N','N','OFF','D','OFF'],
+    // 패턴 A → 고참(김은정): N=6개, E블록 위주
+    ['E','E','E','OFF','E','N','OFF','E','E','N','OFF','E','E','N','OFF','E',
+     'E','N','OFF','E','E','N','OFF','E','E','N','OFF','E','E','E','OFF'],
+    // 패턴 B → 서은회: N=7개, D/E 균형
+    ['D','D','N','OFF','E','E','N','OFF','D','E','N','OFF','D','E','N','OFF',
+     'D','E','N','OFF','D','E','N','OFF','D','E','N','OFF','D','D','D'],
+    // 패턴 C → 정경미: N=8개
+    ['N','OFF','D','N','OFF','D','E','N','OFF','D','E','N','OFF','D','E','N',
+     'OFF','D','E','N','OFF','D','E','N','OFF','D','E','E','OFF','OFF','N'],
+    // 패턴 D → 막내(송은진): N=8개, D블록 위주
+    ['D','N','OFF','OFF','D','D','D','E','N','OFF','D','D','N','OFF','D','D',
+     'N','OFF','D','D','N','OFF','D','D','N','N','OFF','D','D','OFF','N'],
   ];
 
   // 입사 순서대로 패턴 배정
