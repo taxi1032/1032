@@ -719,62 +719,99 @@ function getMemo(y,m){
   return state.memos[k];
 }
 
-// ══════════════════ 자동생성 (블록 제한 방식) ══════════════════
+// ══════════════════ 자동생성 (수기표 패턴 방식) ══════════════════
 function generate(emergency=false){
   const y=Y, m=M, D=dim(y,m);
   const rq=getRq(y,m);
   const existSc=getSc(y,m);
 
   const sc={};
-  state.staff.forEach(s=>{ sc[s.id]={} }); // 완전 초기화 (수기 입력만 나중에 복원)
+  state.staff.forEach(s=>{ sc[s.id]={} });
 
   const tl=state.staff.find(s=>s.isTL);
-  const nurses=state.staff.filter(s=>!s.isTL); // 4명
+  const nurses=state.staff.filter(s=>!s.isTL); // 4명 (입사순)
+  const nursesByJoin=[...nurses]; // 앱 나열 순서 = 경력순 (그대로 유지)
 
-  // ── 블록 제한 상수 ──
-  const MAX_D   = 5;  // D 최대 연속
-  const MAX_E   = 3;  // E 최대 연속
-  const MAX_N   = emergency ? 3 : 3; // N 최대 연속 (항상 3)
-  const MAX_OFF = 3;  // OFF 최대 연속
-  const TGT_N   = emergency ? 3 : 8; // N 월 목표
+  // ── 수기표 분석 기반 4인 순환 패턴 ──
+  // 수기표에서 추출한 실제 패턴:
+  // 블록 단위: 근무2~4일 + 휴무2~3일 반복
+  // N은 월 8개 목표, 블록 2~3일
+  // D는 최대 4~5일 연속
+  // E는 최대 3~4일 연속
+  // OFF는 2~3일 연속 (퐁당 없음)
 
-  // ── 1단계: 사전 15일 주기 패턴 배정 (4명 오프셋) ──
-  // 패턴: N3+OFF2 + E3+OFF2 + D3+OFF2 = 15일 주기
-  // 연속 제한: D≤5, E≤3, N≤3, OFF≤3
-  const cycle15 = ['N','N','N','OFF','OFF','E','E','E','OFF','OFF','D','D','D','D','OFF'];
-  const offsets = [0, 5, 10, 3]; // 4명 시작 오프셋
+  // 32일 주기 패턴 (31일 커버 + 여유 1일)
+  // 4명이 각각 8일씩 오프셋 → 균등 분산
+  const PATTERNS = [
+    // 패턴 A (0일 오프셋): N블록 시작
+    ['E','E','OFF','N','N','OFF','OFF','OFF','D','N','N','N','OFF','D','D','OFF',
+     'E','E','D','OFF','N','N','N','OFF','OFF','OFF','OFF','D','D','D','E','OFF'],
+    // 패턴 B (8일 오프셋): E블록 시작
+    ['OFF','OFF','E','E','E','N','N','OFF','E','E','OFF','OFF','N','N','N','OFF',
+     'D','D','OFF','D','D','OFF','D','N','N','N','OFF','E','E','E','OFF','OFF'],
+    // 패턴 C (16일 오프셋): D블록 시작
+    ['D','D','D','E','E','OFF','N','N','N','OFF','OFF','D','E','OFF','OFF','N',
+     'N','OFF','E','E','E','OFF','OFF','E','E','N','N','N','OFF','OFF','OFF','D'],
+    // 패턴 D (24일 오프셋): 혼합 시작
+    ['N','N','N','OFF','D','E','E','E','OFF','OFF','E','E','OFF','E','E','E','OFF',
+     'N','N','N','OFF','OFF','E','E','OFF','D','E','OFF','OFF','N','N','OFF'],
+  ];
 
-  nurses.forEach((n, idx)=>{
-    const offset = offsets[idx];
+  // 입사 순서대로 패턴 배정
+  nursesByJoin.forEach((n, idx)=>{
+    const pat = PATTERNS[idx % PATTERNS.length];
     for(let d=1;d<=D;d++){
-      const patIdx = ((d-1) + offset) % cycle15.length;
-      sc[n.id][d] = cycle15[patIdx];
+      sc[n.id][d] = pat[(d-1) % pat.length] || 'OFF';
     }
   });
 
-  // ── 2단계: 연차/지정휴무 덮어쓰기 ──
+  // ── 연차/지정휴무 덮어쓰기 ──
   nurses.forEach(n=>{
     rq[n.id]?.alDays.forEach(d=>{ sc[n.id][d]='AL' });
     rq[n.id]?.offDays.slice(0,2).forEach(d=>{ sc[n.id][d]='OFF' });
   });
 
-  // ── 3단계: 수기 입력 복원 ──
+  // ── 수기 입력 복원 ──
   nurses.forEach(n=>{
-    Object.entries(existSc[n.id]||{}).forEach(([d,v])=>{ sc[n.id][parseInt(d)]=v });
+    Object.entries(existSc[n.id]||{}).forEach(([d,v])=>{ if(v) sc[n.id][parseInt(d)]=v });
   });
 
-  // ── 4단계: 금지패턴 교정 ──
+  // ── 금지패턴 교정 ──
   nurses.forEach(n=>{
     for(let d=2;d<=D;d++){
-      const p=sc[n.id][d-1], c=sc[n.id][d];
-      // 나오데/나오이 금지
-      if(p==='N' && (c==='D'||c==='E')) sc[n.id][d]='OFF';
-      // 이데 금지
-      if(p==='E' && c==='D') sc[n.id][d]='E';
+      if(existSc[n.id]?.[d]||rq[n.id]?.offDays.includes(d)||rq[n.id]?.alDays.includes(d)) continue;
+      const p=sc[n.id][d-1];
+      if(p==='N'&&(sc[n.id][d]==='D'||sc[n.id][d]==='E')) sc[n.id][d]='OFF';
+      if(p==='E'&&sc[n.id][d]==='D') sc[n.id][d]='E';
     }
   });
 
-  // ── 5단계: 커버리지 점검 및 보완 ──
+  // ── N 개수 조정: 경력 순서 기준 (앱 나열 순서 = 경력순) ──
+  // 위에서 아래로: 고참→막내 = N 적게→많게
+  // 회사 입장: 고참(연봉 높음) N 최소, 막내(연봉 낮음) N 최다
+  const nTargets = emergency ? [3,3,3,3] : [6,7,8,8]; // 경력순(앱순서) 고참→막내
+  nursesByJoin.forEach((n, rank)=>{
+    const tgt = nTargets[rank];
+    let nCnt = Object.values(sc[n.id]).filter(v=>v==='N').length;
+    // N 초과 → 다른 N 있는 날 OFF로
+    for(let d=D;d>=1&&nCnt>tgt;d--){
+      if(sc[n.id][d]==='N'&&!existSc[n.id]?.[d]&&!rq[n.id]?.alDays.includes(d)){
+        const otherN=nurses.some(o=>o.id!==n.id&&sc[o.id][d]==='N');
+        if(otherN){ sc[n.id][d]='OFF'; nCnt--; }
+      }
+    }
+    // N 부족 → OFF를 N으로
+    for(let d=1;d<=D&&nCnt<tgt;d++){
+      if(sc[n.id][d]==='OFF'&&!existSc[n.id]?.[d]&&!rq[n.id]?.offDays.includes(d)&&!rq[n.id]?.alDays.includes(d)){
+        const p=d>1?sc[n.id][d-1]:'';
+        if(p!=='N'&&p!=='E'){ // 나오데/이데 방지
+          sc[n.id][d]='N'; nCnt++;
+        }
+      }
+    }
+  });
+
+  // ── 커버리지 보완 ──
   const isProtected=(n,d)=>{
     if(existSc[n.id]?.[d]) return true;
     if(rq[n.id]?.offDays.includes(d)) return true;
@@ -785,71 +822,45 @@ function generate(emergency=false){
 
   for(let d=1;d<=D;d++){
     const fillable=nurses.filter(n=>sc[n.id][d]==='OFF'&&!isProtected(n,d));
+    const p=(n,d)=>d>1?sc[n.id][d-1]:'';
 
     // N 공백 보완
-    if(!nurses.some(n=>sc[n.id][d]==='N') && !emergency){
-      const pick=fillable.find(n=>d===1||sc[n.id][d-1]!=='N');
+    if(!nurses.some(n=>sc[n.id][d]==='N')&&!emergency){
+      const pick=fillable.find(n=>p(n,d)!=='N'&&p(n,d)!=='E');
       if(pick) sc[pick.id][d]='N';
     }
     // E 공백 보완
     if(!nurses.some(n=>sc[n.id][d]==='E')){
-      const pick=fillable.find(n=>
-        (d===1||(sc[n.id][d-1]!=='N'))
-      );
+      const pick=fillable.find(n=>sc[n.id][d]==='OFF'&&p(n,d)!=='N');
       if(pick) sc[pick.id][d]='E';
     }
-    // D 공백 보완
+    // D 공백 보완 → 팀장 특근
     if(!nurses.some(n=>sc[n.id][d]==='D')){
-      const pick=fillable.find(n=>
-        (d===1||(sc[n.id][d-1]!=='N'&&sc[n.id][d-1]!=='E'))
-      );
+      const pick=fillable.find(n=>sc[n.id][d]==='OFF'&&p(n,d)!=='N'&&p(n,d)!=='E');
       if(pick){
         sc[pick.id][d]='D';
-      } else {
-        // 팀원 불가 → 팀장 특근 투입
-        if(tl && !existSc[tl.id]?.[d] && !rq[tl.id]?.alDays.includes(d)){
-          sc[tl.id][d]='D';
-        }
+      } else if(tl&&!existSc[tl.id]?.[d]&&!rq[tl.id]?.alDays.includes(d)){
+        sc[tl.id][d]='D'; // 팀장 특근
       }
     }
   }
 
-  // ── 6단계: 팀장 스케줄 (수기 보존 후 배정) ──
+  // ── 팀장 스케줄 배정 ──
   if(tl){
     for(let d=1;d<=D;d++){
-      if(sc[tl.id][d]) continue; // 특근 또는 수기 이미 있으면 유지
+      if(sc[tl.id][d]) continue; // 특근 이미 있으면 유지
       const dt=new Date(y,m-1,d), dstr=ds(y,m,d);
-      sc[tl.id][d] = isWH(dt,dstr) ? 'OFF' : 'D';
+      sc[tl.id][d]=isWH(dt,dstr)?'OFF':'D';
     }
     rq[tl.id]?.alDays.forEach(d=>{ sc[tl.id][d]='AL' });
-    // 수기 복원
-    Object.entries(existSc[tl.id]||{}).forEach(([d,v])=>{ sc[tl.id][parseInt(d)]=v });
+    Object.entries(existSc[tl.id]||{}).forEach(([d,v])=>{ if(v) sc[tl.id][parseInt(d)]=v });
   }
 
-  // ── 7단계: 최종 D 공백 점검 → 팀장 무조건 특근 ──
+  // ── 최종 D 공백 → 팀장 무조건 특근 ──
   for(let d=1;d<=D;d++){
-    const hasD=nurses.some(n=>sc[n.id][d]==='D') || sc[tl?.id]?.[d]==='D';
-    if(!hasD && tl){
-      sc[tl.id][d]='D'; // 팀장 특근
-    }
+    const hasD=nurses.some(n=>sc[n.id][d]==='D')||sc[tl?.id]?.[d]==='D';
+    if(!hasD&&tl){ sc[tl.id][d]='D'; }
   }
-
-  // ── 8단계: N 수당 최소화 — 입사 순서대로 N 줄이기 ──
-  // 나이트 수당이 있으므로 N이 많은 사람부터 줄임
-  // 입사 오래된 순(고참)부터 N 우선 보유
-  const nursesByJoin=[...nurses].sort((a,b)=>a.joinDate.localeCompare(b.joinDate));
-  nursesByJoin.forEach((n,rank)=>{
-    const maxN = emergency ? 3 : Math.max(6, 8 - rank); // 고참일수록 N 많이
-    let nCnt=0;
-    for(let d=1;d<=D;d++) if(sc[n.id][d]==='N') nCnt++;
-    // N 초과 시 다른 N 있는 날 OFF로
-    for(let d=D;d>=1&&nCnt>maxN;d--){
-      if(sc[n.id][d]==='N' && !isProtected(n,d)){
-        const otherN=nurses.some(o=>o.id!==n.id&&sc[o.id][d]==='N');
-        if(otherN){ sc[n.id][d]='OFF'; nCnt--; }
-      }
-    }
-  });
 
   state.schedules[mk(y,m)]=sc;
   const v=getVer(y,m); v.ver++; v.updatedAt=new Date().toISOString(); v.emergency=emergency;
