@@ -578,6 +578,7 @@ if(!state.versions) state.versions = {};
 if(!state.memos) state.memos = {};
 if(!state.satRotIdx) state.satRotIdx = {};
 if(!state.annualLeave) state.annualLeave = {};
+if(!state.genFromDay) state.genFromDay = {}; // YYYY-MM -> 기준일
 
 // ══════════════════ 연차 시스템 ══════════════════
 
@@ -719,93 +720,88 @@ function getMemo(y,m){
   return state.memos[k];
 }
 
-// ══════════════════ 자동생성 (수기표 패턴 방식) ══════════════════
-function generate(emergency=false){
+// ══════════════════ 자동생성 (수기표 패턴 방식, 항상 새로 생성) ══════════════════
+function generate(emergency=false, fromDay=1){
   const y=Y, m=M, D=dim(y,m);
   const rq=getRq(y,m);
-  const existSc=getSc(y,m);
+  const existSc=getSc(y,m); // 기준일 이전 보존용
 
   const sc={};
   state.staff.forEach(s=>{ sc[s.id]={} });
 
   const tl=state.staff.find(s=>s.isTL);
-  const nurses=state.staff.filter(s=>!s.isTL); // 4명 (입사순)
+  const nurses=state.staff.filter(s=>!s.isTL); // 4명 (경력순)
   const nursesByJoin=[...nurses]; // 앱 나열 순서 = 경력순 (그대로 유지)
 
   // ── 검증 완료된 4인 패턴 ──
   // 경력순: 고참→막내 = N 적게→많게 (회사 비용 최적화)
-  // 검증: 금지패턴 없음, N목표 충족, 연속제한 준수
-  // 공백은 커버리지 보완 + 팀장 특근으로 처리
   const PATTERNS = [
-    // 패턴 A → 고참(김은정): N=6개, E블록 위주
+    // 패턴 A → 고참(김은정): N=6개
     ['E','E','E','OFF','E','N','OFF','E','E','N','OFF','E','E','N','OFF','E',
      'E','N','OFF','E','E','N','OFF','E','E','N','OFF','E','E','E','OFF'],
-    // 패턴 B → 서은회: N=7개, D/E 균형
+    // 패턴 B → 서은회: N=7개
     ['D','D','N','OFF','E','E','N','OFF','D','E','N','OFF','D','E','N','OFF',
      'D','E','N','OFF','D','E','N','OFF','D','E','N','OFF','D','D','D'],
     // 패턴 C → 정경미: N=8개
     ['N','OFF','D','N','OFF','D','E','N','OFF','D','E','N','OFF','D','E','N',
      'OFF','D','E','N','OFF','D','E','N','OFF','D','E','E','OFF','OFF','N'],
-    // 패턴 D → 막내(송은진): N=8개, D블록 위주
+    // 패턴 D → 막내(송은진): N=8개
     ['D','N','OFF','OFF','D','D','D','E','N','OFF','D','D','N','OFF','D','D',
      'N','OFF','D','D','N','OFF','D','D','N','N','OFF','D','D','OFF','N'],
   ];
 
-  // 입사 순서대로 패턴 배정
+  // ── 1단계: fromDay 이전은 기존 데이터 그대로 복사 (보존) ──
+  nurses.forEach(n=>{
+    for(let d=1; d<fromDay; d++){
+      if(existSc[n.id]?.[d]) sc[n.id][d]=existSc[n.id][d];
+    }
+  });
+
+  // ── 2단계: fromDay부터 끝까지 패턴 새로 배정 ──
   nursesByJoin.forEach((n, idx)=>{
     const pat = PATTERNS[idx % PATTERNS.length];
-    for(let d=1;d<=D;d++){
+    for(let d=fromDay; d<=D; d++){
+      // 패턴 인덱스는 fromDay 기준으로 0부터 시작 (이어지는 느낌으로)
       sc[n.id][d] = pat[(d-1) % pat.length] || 'OFF';
     }
   });
 
-  // ── 연차/지정휴무 덮어쓰기 ──
+  // ── 연차/지정휴무 요청만 덮어쓰기 (fromDay 이후만, 이전은 이미 보존됨) ──
   nurses.forEach(n=>{
-    rq[n.id]?.alDays.forEach(d=>{ sc[n.id][d]='AL' });
-    rq[n.id]?.offDays.slice(0,2).forEach(d=>{ sc[n.id][d]='OFF' });
+    rq[n.id]?.alDays.forEach(d=>{ if(d>=fromDay) sc[n.id][d]='AL'; });
+    rq[n.id]?.offDays.slice(0,2).forEach(d=>{ if(d>=fromDay) sc[n.id][d]='OFF'; });
   });
 
-  // ── 수기 입력 복원 ──
+  // ── 금지패턴 교정 (fromDay 이후만, 요청일은 보호) ──
   nurses.forEach(n=>{
-    Object.entries(existSc[n.id]||{}).forEach(([d,v])=>{ if(v) sc[n.id][parseInt(d)]=v });
-  });
-
-  // ── 금지패턴 교정 ──
-  nurses.forEach(n=>{
-    for(let d=2;d<=D;d++){
-      if(existSc[n.id]?.[d]||rq[n.id]?.offDays.includes(d)||rq[n.id]?.alDays.includes(d)) continue;
+    for(let d=Math.max(2,fromDay); d<=D; d++){
+      if(rq[n.id]?.offDays.includes(d)||rq[n.id]?.alDays.includes(d)) continue;
       const p=sc[n.id][d-1];
       if(p==='N'&&(sc[n.id][d]==='D'||sc[n.id][d]==='E')) sc[n.id][d]='OFF';
       if(p==='E'&&sc[n.id][d]==='D') sc[n.id][d]='E';
     }
   });
 
-  // ── N 개수 조정: 경력 순서 기준 (앱 나열 순서 = 경력순) ──
-  // 위에서 아래로: 고참→막내 = N 적게→많게
-  // 회사 입장: 고참(연봉 높음) N 최소, 막내(연봉 낮음) N 최다
-  const nTargets = emergency ? [3,3,3,3] : [6,7,8,8]; // 경력순(앱순서) 고참→막내
+  // ── N 개수 조정: 경력순 (고참→막내 = N 적게→많게) ──
+  const nTargets = emergency ? [3,3,3,3] : [6,7,8,8];
   nursesByJoin.forEach((n, rank)=>{
     const tgt = nTargets[rank];
     let nCnt = Object.values(sc[n.id]).filter(v=>v==='N').length;
 
-    // N 초과 → OFF로 전환 (같은 날 다른 사람 N 없어도 가능, 커버리지는 후속 보완)
-    for(let d=D;d>=1&&nCnt>tgt;d--){
-      if(sc[n.id][d]==='N' && !existSc[n.id]?.[d] && !rq[n.id]?.alDays.includes(d)){
-        // 같은 날 다른 사람 N 있으면 우선
+    // N 초과 → OFF로 전환 (fromDay 이전 건드리지 않음)
+    for(let d=D;d>=fromDay&&nCnt>tgt;d--){
+      if(sc[n.id][d]==='N' && !rq[n.id]?.alDays.includes(d)){
         const otherN=nurses.some(o=>o.id!==n.id&&sc[o.id][d]==='N');
         if(otherN){ sc[n.id][d]='OFF'; nCnt--; continue; }
-        // 없어도 목표 초과분이 크면 (2개 이상) 강제 감소
         if(nCnt-tgt>=2){ sc[n.id][d]='OFF'; nCnt--; }
       }
     }
-
-    // N 부족 → OFF를 N으로 (금지패턴 방지)
-    for(let d=1;d<=D&&nCnt<tgt;d++){
-      if(sc[n.id][d]==='OFF' && !existSc[n.id]?.[d] &&
+    // N 부족 → OFF를 N으로 (fromDay 이전 건드리지 않음)
+    for(let d=fromDay;d<=D&&nCnt<tgt;d++){
+      if(sc[n.id][d]==='OFF' &&
          !rq[n.id]?.offDays.includes(d) && !rq[n.id]?.alDays.includes(d)){
         const prev=d>1?sc[n.id][d-1]:'';
         const next=d<D?sc[n.id][d+1]:'';
-        // 나오데/나오이/이데 방지
         if(prev!=='N'&&prev!=='E'&&next!=='D'&&next!=='E'){
           sc[n.id][d]='N'; nCnt++;
         }
@@ -813,16 +809,16 @@ function generate(emergency=false){
     }
   });
 
-  // ── 커버리지 보완 ──
+  // ── 커버리지 보완 (fromDay 이후만) ──
   const isProtected=(n,d)=>{
-    if(existSc[n.id]?.[d]) return true;
+    if(d<fromDay) return true; // 기준일 이전은 보호
     if(rq[n.id]?.offDays.includes(d)) return true;
     if(rq[n.id]?.alDays.includes(d)) return true;
     if(['KB','SL','AL'].includes(sc[n.id][d])) return true;
     return false;
   };
 
-  for(let d=1;d<=D;d++){
+  for(let d=fromDay;d<=D;d++){
     const fillable=nurses.filter(n=>sc[n.id][d]==='OFF'&&!isProtected(n,d));
     const p=(n,d)=>d>1?sc[n.id][d-1]:'';
 
@@ -841,25 +837,28 @@ function generate(emergency=false){
       const pick=fillable.find(n=>sc[n.id][d]==='OFF'&&p(n,d)!=='N'&&p(n,d)!=='E');
       if(pick){
         sc[pick.id][d]='D';
-      } else if(tl&&!existSc[tl.id]?.[d]&&!rq[tl.id]?.alDays.includes(d)){
+      } else if(tl&&!rq[tl.id]?.alDays.includes(d)){
         sc[tl.id][d]='D'; // 팀장 특근
       }
     }
   }
 
-  // ── 팀장 스케줄 배정 ──
+  // ── 팀장 스케줄 배정 (fromDay 이전은 기존 유지) ──
   if(tl){
     for(let d=1;d<=D;d++){
+      if(d<fromDay){
+        if(existSc[tl.id]?.[d]) sc[tl.id][d]=existSc[tl.id][d];
+        continue;
+      }
       if(sc[tl.id][d]) continue; // 특근 이미 있으면 유지
       const dt=new Date(y,m-1,d), dstr=ds(y,m,d);
       sc[tl.id][d]=isWH(dt,dstr)?'OFF':'D';
     }
-    rq[tl.id]?.alDays.forEach(d=>{ sc[tl.id][d]='AL' });
-    Object.entries(existSc[tl.id]||{}).forEach(([d,v])=>{ if(v) sc[tl.id][parseInt(d)]=v });
+    rq[tl.id]?.alDays.forEach(d=>{ if(d>=fromDay) sc[tl.id][d]='AL'; });
   }
 
-  // ── 최종 D 공백 → 팀장 무조건 특근 ──
-  for(let d=1;d<=D;d++){
+  // ── 최종 D 공백 → 팀장 무조건 특근 (fromDay 이후만) ──
+  for(let d=fromDay;d<=D;d++){
     const hasD=nurses.some(n=>sc[n.id][d]==='D')||sc[tl?.id]?.[d]==='D';
     if(!hasD&&tl){ sc[tl.id][d]='D'; }
   }
@@ -931,6 +930,25 @@ function renderDuty(){
     <span class="li"><span class="badge bs">병</span>병가</span>
     <span class="li"><span class="badge bd" style="box-shadow:0 0 0 2px var(--KB);background:rgba(249,115,22,.2)">D</span>팀장특근⚡</span>
   </div>
+
+  <div class="card" style="margin-bottom:10px;padding:12px 14px">
+    <div style="font-size:12px;font-weight:900;color:var(--pink2);margin-bottom:8px">📌 자동생성 기준일</div>
+    <div style="font-size:11px;color:var(--sub2);margin-bottom:8px;line-height:1.6">
+      선택한 날짜 <strong style="color:var(--text)">이전은 그대로 유지</strong>,
+      그 날짜부터 <strong style="color:var(--text)">새로 작성</strong>됩니다.<br>
+      <span style="color:var(--KB)">※ 긴급 휴무(병가·기복) 발생 시 발생일로 설정하세요</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:12px;color:var(--sub2);font-weight:700">기준일</span>
+      <input type="number" id="fromDayInput" min="1" max="${dim(Y,M)}" value="${state.genFromDay?.[mk(Y,M)]||1}"
+        style="width:64px;background:#fdf0f5;border:1.5px solid var(--border2);color:var(--text);
+               padding:7px 10px;border-radius:9px;font-size:14px;font-weight:700;outline:none;text-align:center"
+        onchange="setFromDay(this.value)">
+      <span style="font-size:12px;color:var(--sub2)">일부터 적용</span>
+      ${(state.genFromDay?.[mk(Y,M)]||1)>1?`<span style="font-size:10px;color:var(--KB);background:#fff3e0;padding:3px 8px;border-radius:10px;font-weight:700">${state.genFromDay[mk(Y,M)]-1}일까지 보존</span>`:'<span style="font-size:10px;color:var(--sub)">전체 새로 작성</span>'}
+    </div>
+  </div>
+
   <div class="btn-row">
     <button class="genbtn" onclick="doGen(false)">✨ 자동 듀티 생성</button>
     <button class="emgbtn" onclick="doGen(true)">⚡ 긴급</button>
@@ -1465,12 +1483,25 @@ function toggleHol(dstr){
 }
 function removeHol(dstr){ state.holidays=state.holidays.filter(h=>h!==dstr); save(); render(); }
 
+function setFromDay(val){
+  const k=mk(Y,M);
+  const v=Math.max(1, Math.min(dim(Y,M), parseInt(val)||1));
+  state.genFromDay[k]=v;
+  save(); render();
+  showToast(`기준일 ${v}일로 설정됨`);
+}
+
 function doGen(emergency){
+  const k=mk(Y,M);
+  const fromDay=state.genFromDay?.[k]||1;
+  const rangeMsg = fromDay>1
+    ? `\n\n📌 ${fromDay}일부터 새로 작성됩니다.\n(${fromDay-1}일까지는 그대로 유지)`
+    : '\n\n📌 1일부터 전체 새로 작성됩니다.';
   const msg=emergency
-    ? '⚡ 긴급모드로 생성합니다.\nN 최대 3개 · D 최소 1명 기준으로 배정됩니다.\n기존 듀티가 덮어쓰여집니다.'
-    : '✨ 자동 듀티를 생성합니다.\n기존 듀티가 덮어쓰여집니다.';
+    ? `⚡ 긴급모드로 생성합니다.\nN 최대 3개 · D 최소 1명 기준으로 배정됩니다.${rangeMsg}\n(휴무요청·연차 요청은 유지됩니다)`
+    : `✨ 자동 듀티를 생성합니다.${rangeMsg}\n(휴무요청·연차 요청은 유지됩니다)`;
   if(!confirm(msg)) return;
-  generate(emergency); render();
+  generate(emergency, fromDay); render();
   showToast(emergency ? '⚡ 긴급 듀티 생성 완료' : '✨ 듀티 생성 완료');
 }
 
