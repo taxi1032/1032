@@ -1463,7 +1463,14 @@ function calcMonthSummary(y,m){
   const fixedCost=(fixedStartNorm&&ym<fixedStartNorm)?0:getFixedCost(s);
   let ti=0,tg=0,te=0,tbf=0,tdd=0,twd=0,th=0,tt=0,wd=0,hol=0;
   entries.forEach(e=>{
-    if(e.holiday==='full'){hol++;return;}
+    if(e.holiday==='full'){
+      hol++;
+      // 휴무일에도 카드 실입금(수익) 및 지출 반영
+      const holidayIncome=(e.cardActual&&e.cardActual>0?e.cardActual:e.card)||0;
+      const holidayExp=(e.charge||0)+(e.parking||0)+(e.wash||0)+(e.supplies||0)+(e.consumables||0)+(e.repair||0)+(e.expenseEtc||0)+(e.btxFeePaid||0);
+      ti+=holidayIncome; te+=holidayExp;
+      return;
+    }
     wd++;
     const c=calcEntry(e);
     ti+=c.netIncome;tg+=c.grossIncome;te+=c.dailyExpense;tbf+=e.btxFee;
@@ -1504,14 +1511,21 @@ function renderDayItem(e,rec,highlight){
     const cardActual=e.cardActual||0;
     const cardTotal=e.card||0;
     const hasCard=cardActual>0||cardTotal>0;
+    const holidayIncome=cardActual>0?cardActual:cardTotal;
+    const holidayProfit=holidayIncome-dailyExp;
     const safeDate=e.date;
     const safeMemo=escQ(e.memo||'');
     const safeNote=escQ(e.note||'');
+    // 헤더 오른쪽: 순이익 또는 지출만 표시
+    const profitStr=holidayIncome>0
+      ?`<span style="font-size:14px;font-weight:900;font-family:'DM Mono',monospace;color:${holidayProfit>=0?'var(--green)':'var(--red)'}">${holidayProfit>=0?'+':'-'}${fmt(Math.abs(holidayProfit))}원</span>`
+      :(dailyExp>0?`<span style="font-size:13px;color:var(--red)">-${fmt(dailyExp)}원</span>`:'');
     return `<div class="day-item holiday-full">
       <div class="day-header" onclick="toggleDetail('${safeDate}')">
         <span class="day-date">${dl}<span class="weekday">(${wd})</span></span>
         <div style="text-align:right">
-          <span style="font-size:12px;color:var(--text3)">🏖 하루 휴무${hasCard?` · <span style="color:var(--green)">카드입금 ${fmt(cardActual||cardTotal)}원</span>`:''}${dailyExp>0?` · <span style="color:var(--red)">-${fmt(dailyExp)}원</span>`:''}</span>
+          <span style="font-size:12px;color:var(--text3)">🏖 하루 휴무</span>
+          ${profitStr}
           ${e.note?`<div style="font-size:11px;color:var(--purple);margin-top:2px;font-family:'Noto Sans KR'">📌 ${safeNote}</div>`:''}
           ${e.memo?`<div style="font-size:11px;color:var(--orange);margin-top:2px;font-family:'Noto Sans KR'">📝 ${safeMemo}</div>`:''}
         </div>
@@ -1541,6 +1555,7 @@ function renderDayItem(e,rec,highlight){
         <div class="detail-divider"></div>
         ${e.note?`<div class="detail-row"><span class="dl">📌 비고</span><span class="dv" style="color:var(--purple);font-family:'Noto Sans KR'">${safeNote}</span></div>`:`<div class="detail-row"><span class="dl" style="color:var(--text3)">📌 비고</span><span class="dv" style="color:var(--text3)">-</span></div>`}
         ${e.memo?`<div class="detail-row"><span class="dl">📝 메모</span><span class="dv" style="color:var(--orange);font-family:'Noto Sans KR'">${safeMemo}</span></div>`:`<div class="detail-row"><span class="dl" style="color:var(--text3)">📝 메모</span><span class="dv" style="color:var(--text3)">-</span></div>`}
+        ${holidayIncome>0?`<div class="detail-divider"></div><div class="detail-row"><span class="dl" style="font-weight:700">일 순이익</span><span class="dv" style="color:${holidayProfit>=0?'var(--green)':'var(--red)'};font-size:15px">${holidayProfit>=0?'+':'-'}${fmt(Math.abs(holidayProfit))}원</span></div>`:''}
         <div class="day-actions">
           <button class="btn-edit" onclick="editEntry('${safeDate}')">수정</button>
           <button class="btn-del" onclick="deleteEntry('${safeDate}')">삭제</button>
